@@ -316,15 +316,41 @@ export default function TransferPage() {
               </div>
               <h2 className="text-base font-bold text-white tracking-tight">Enter Verification Code</h2>
               <p className="text-xs text-slate-400">
-                We sent a 6-digit numeric OTP to <strong className="text-white">{email}</strong>
+                A 6-digit numeric OTP was sent to <strong className="text-white">{email}</strong>
               </p>
             </div>
 
-            {/* Dev Mock Banner if SMTP in simulation mode */}
-            {devOtp && (
-              <div className="p-3 bg-cyan-950/40 border border-cyan-500/30 rounded-xl text-center">
-                <p className="text-[10px] text-cyan-300 font-mono uppercase tracking-wider">Evaluation Code (Local Mode):</p>
+            {/* Email Dispatch Notice */}
+            {!devOtp ? (
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-center space-y-1">
+                <p className="text-[11px] text-emerald-300 font-semibold flex items-center justify-center space-x-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Verification Email Delivered to Your Inbox</span>
+                </p>
+                <p className="text-[10px] text-slate-400">
+                  Please check your email inbox (and spam/junk folder) for the 6-digit OTP code.
+                </p>
+              </div>
+            ) : (
+              /* Simulated code shown only when SMTP credentials are not yet configured in .env */
+              <div className="p-3 bg-cyan-950/40 border border-cyan-500/30 rounded-xl text-center space-y-1">
+                <div className="flex items-center justify-between text-[10px] text-cyan-300 font-mono">
+                  <span>MOCK DEMO MODE (SMTP NOT CONFIGURED)</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const digits = devOtp.split('');
+                      setOtpDigits(digits);
+                    }}
+                    className="px-2 py-0.5 rounded bg-violet-600 hover:bg-violet-500 text-white font-bold text-[9px] transition-colors"
+                  >
+                    Auto-Fill
+                  </button>
+                </div>
                 <p className="text-xl font-bold font-mono text-white tracking-widest mt-0.5">{devOtp}</p>
+                <p className="text-[9px] text-slate-400">
+                  Add SMTP credentials in <code className="text-cyan-300">backend/.env</code> to send real emails directly to personal inboxes.
+                </p>
               </div>
             )}
 
