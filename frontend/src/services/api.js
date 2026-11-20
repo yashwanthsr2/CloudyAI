@@ -56,6 +56,7 @@ export const api = {
   // Files & Quota
   uploadFile: (formData) => apiRequest('/upload', { method: 'POST', body: formData }),
   getFiles: () => apiRequest('/files'),
+  listFiles: () => apiRequest('/files'),
   getFile: (id) => apiRequest(`/files/${id}`),
   deleteFile: (id) => apiRequest(`/files/${id}`, { method: 'DELETE' }),
 

@@ -22,7 +22,7 @@ function ProtectedLayout() {
 
   const refreshFiles = async () => {
     try {
-      const res = await api.listFiles();
+      const res = await api.getFiles();
       setFiles(res.files || []);
       setQuota(res.quota || null);
     } catch (err) {
