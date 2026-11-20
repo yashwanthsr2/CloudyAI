@@ -101,7 +101,8 @@ export async function downloadMaskedFile(req, res) {
       }
     }
 
-    const safeFilename = `masked-${file.filename || 'document.png'}`;
+    const baseFilename = (file.filename || 'document').replace(/\.[^/.]+$/, '');
+    const safeFilename = `masked-${baseFilename}.png`;
     res.setHeader('Content-Type', 'image/png');
     res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
     return res.send(fileBuffer);

@@ -1,6 +1,7 @@
 import { isConfigured, supabase, STORAGE_BUCKET, localStore } from '../config/supabase.js';
 import { scanDocument } from '../services/scannerService.js';
 import { generateMaskedImage } from '../services/maskingService.js';
+import { processPdfDocument } from '../services/pdfService.js';
 import crypto from 'crypto';
 
 /**
@@ -51,26 +52,39 @@ export async function scanFile(req, res) {
       fileBuffer = storageRes.data;
     }
 
-    // Check if file is an image
-    if (!fileRecord.mime_type.startsWith('image/')) {
+    const isPdf = fileRecord.mime_type === 'application/pdf' || fileRecord.filename.toLowerCase().endsWith('.pdf');
+    const isImage = fileRecord.mime_type.startsWith('image/');
+
+    if (!isImage && !isPdf) {
       return res.status(400).json({
         success: false,
-        error: 'OCR scanning and visual redaction currently support image formats (JPEG, PNG, WebP). PDFs require conversion to image.'
+        error: `Unsupported file format: ${fileRecord.mime_type}. Only images (JPEG, PNG, WebP) and PDF documents are supported.`
       });
     }
 
-    // Step 1: Run Privacy Scanner (OCR + Regex)
-    const scanResult = await scanDocument(fileBuffer);
-
-    // Step 2: If sensitive data found, generate masked image copy
+    let scanResult = null;
     let maskedStoragePath = null;
     let maskedBuffer = null;
 
-    if (scanResult.hasSensitiveData) {
-      maskedBuffer = await generateMaskedImage(fileBuffer, scanResult.detectedSensitiveBoxes);
+    if (isPdf) {
+      // Step 1: Process PDF document (render raster page image, extract text, run OCR)
+      const pdfProcessed = await processPdfDocument(fileBuffer, fileRecord.filename);
+      scanResult = pdfProcessed.scanResult;
+      maskedBuffer = pdfProcessed.maskedBuffer;
       maskedStoragePath = `${userId}/masked-${file_id}.png`;
+    } else {
+      // Step 1: Run Privacy Scanner on image (OCR + Regex)
+      scanResult = await scanDocument(fileBuffer);
 
-      // Store masked copy separately; original remains unmodified
+      // Step 2: If sensitive data found, generate masked image copy
+      if (scanResult.hasSensitiveData) {
+        maskedBuffer = await generateMaskedImage(fileBuffer, scanResult.detectedSensitiveBoxes);
+        maskedStoragePath = `${userId}/masked-${file_id}.png`;
+      }
+    }
+
+    // Step 2: Store masked copy separately; original remains unmodified
+    if (maskedBuffer && maskedStoragePath) {
       if (isConfigured && supabase) {
         const { error: maskUploadErr } = await supabase.storage
           .from(STORAGE_BUCKET)
