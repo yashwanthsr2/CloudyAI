@@ -47,28 +47,28 @@ describe('PRIVACLOUD AI — 26 Test Master Verification Suite', () => {
     assert.strictEqual(mimeTypesAllowed.includes(uploadedMime), false, 'PDF files must be rejected');
   });
 
-  // Test 5: Rejection of files above 5 MB
-  test('5. Rejection of files above 5 MB limit', () => {
-    const fileSize = 6 * 1024 * 1024; // 6 MB
-    assert.ok(fileSize > MAX_FILE_SIZE_BYTES, 'Files > 5MB must exceed max size');
+  // Test 5: Rejection of files above maximum limit
+  test('5. Rejection of files above maximum limit', () => {
+    const fileSize = MAX_FILE_SIZE_BYTES + (1024 * 1024);
+    assert.ok(fileSize > MAX_FILE_SIZE_BYTES, 'Files exceeding limit must be rejected');
   });
 
-  // Test 6: Per-user quota enforcement (100 MB)
-  test('6. Per-user quota enforcement prevents uploads exceeding 100 MB total', async () => {
+  // Test 6: Per-user quota enforcement (10 GB)
+  test('6. Per-user quota enforcement prevents uploads exceeding user quota', async () => {
     const userId = crypto.randomUUID();
-    // Simulate user having 98 MB used
+    // Simulate user near quota limit
     await localStore.insertFile({
       id: crypto.randomUUID(),
       user_id: userId,
       filename: 'large.png',
       storage_path_original: `${userId}/large.png`,
-      size_bytes: 98 * 1024 * 1024,
+      size_bytes: USER_QUOTA_BYTES - (1024 * 1024),
       mime_type: 'image/png'
     });
 
     const used = await localStore.getUserStorageUsed(userId);
-    const incomingSize = 4 * 1024 * 1024; // 4 MB (would exceed 100 MB)
-    assert.ok(used + incomingSize > USER_QUOTA_BYTES, 'Must exceed 100MB quota');
+    const incomingSize = 2 * 1024 * 1024; // 2 MB (would exceed quota)
+    assert.ok(used + incomingSize > USER_QUOTA_BYTES, 'Must exceed user quota');
   });
 
   // Test 7: Cross-user file access denial

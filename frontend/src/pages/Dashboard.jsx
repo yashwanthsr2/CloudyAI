@@ -48,9 +48,15 @@ export default function Dashboard({ files = [], quota = null, onRefresh }) {
   const noneCount = files.filter(f => !f.risk_level || f.risk_level === 'NONE').length;
 
   const usedBytes = quota?.used_bytes || 0;
-  const usedMb = (usedBytes / (1024 * 1024)).toFixed(1);
-  const remainingMb = Math.max(0, ((100 * 1024 * 1024 - usedBytes) / (1024 * 1024))).toFixed(1);
-  const percentUsed = Math.min(100, Math.round((usedBytes / (100 * 1024 * 1024)) * 100));
+  const totalBytes = quota?.total_bytes || (10 * 1024 * 1024 * 1024);
+  const formatBytes = (bytes) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  };
+  const usedFormatted = formatBytes(usedBytes);
+  const totalFormatted = formatBytes(totalBytes);
+  const percentUsed = Math.min(100, Math.round((usedBytes / totalBytes) * 100));
 
   const recentFiles = files.slice(0, 5);
   const recentEvents = summary?.recent_events?.slice(0, 5) || [];
@@ -117,8 +123,8 @@ export default function Dashboard({ files = [], quota = null, onRefresh }) {
 
           <div>
             <div className="flex items-baseline space-x-1.5">
-              <span className="text-2xl font-bold font-mono text-white">{usedMb}</span>
-              <span className="text-xs text-slate-400 font-mono">/ 100 MB</span>
+              <span className="text-2xl font-bold font-mono text-white">{usedFormatted}</span>
+              <span className="text-xs text-slate-400 font-mono">/ {totalFormatted}</span>
             </div>
             
             <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-2">

@@ -13,7 +13,7 @@ const allowedMimeTypes = [
 export const upload = multer({
   storage,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5 MB maximum individual file limit
+    fileSize: 25 * 1024 * 1024 // 25 MB maximum individual file limit
   },
   fileFilter: (req, file, cb) => {
     const isAllowedMime = allowedMimeTypes.includes(file.mimetype.toLowerCase());

@@ -35,11 +35,15 @@ export default function Sidebar({ quota }) {
   ];
 
   const usedBytes = quota?.used_bytes || 0;
-  const usedFormatted = usedBytes < 1024 * 1024
-    ? `${(usedBytes / 1024).toFixed(0)} KB`
-    : `${(usedBytes / (1024 * 1024)).toFixed(1)} MB`;
-  const totalMb = 100;
-  const percentUsed = Math.min(100, Math.round((usedBytes / (100 * 1024 * 1024)) * 100));
+  const totalBytes = quota?.total_bytes || (10 * 1024 * 1024 * 1024);
+  const formatBytes = (bytes) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+  };
+  const usedFormatted = formatBytes(usedBytes);
+  const totalFormatted = formatBytes(totalBytes);
+  const percentUsed = Math.min(100, Math.round((usedBytes / totalBytes) * 100));
 
   const userEmail = user?.email || 'security.officer@privacloud.ai';
   const userInitials = userEmail.substring(0, 2).toUpperCase();
@@ -131,7 +135,7 @@ export default function Sidebar({ quota }) {
 
           <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
             <span>{usedFormatted} used</span>
-            <span>{totalMb} MB limit</span>
+            <span>{totalFormatted} limit</span>
           </div>
         </div>
 

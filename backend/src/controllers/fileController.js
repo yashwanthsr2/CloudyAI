@@ -17,15 +17,15 @@ export async function uploadFile(req, res) {
     const sizeBytes = req.file.size;
     const fileBuffer = req.file.buffer;
 
-    // 1. Enforce individual file size limit (5MB)
+    // 1. Enforce individual file size limit (25MB)
     if (sizeBytes > MAX_FILE_SIZE_BYTES) {
       return res.status(400).json({
         success: false,
-        error: `File exceeds maximum individual limit of 5 MB (${(sizeBytes / (1024 * 1024)).toFixed(2)} MB uploaded).`
+        error: `File exceeds maximum individual limit of ${(MAX_FILE_SIZE_BYTES / (1024 * 1024)).toFixed(0)} MB (${(sizeBytes / (1024 * 1024)).toFixed(2)} MB uploaded).`
       });
     }
 
-    // 2. Enforce total per-user storage quota (100MB)
+    // 2. Enforce total per-user storage quota (10GB)
     let currentUsed = 0;
     if (isConfigured && supabase) {
       const { data: userFiles, error: sumErr } = await supabase

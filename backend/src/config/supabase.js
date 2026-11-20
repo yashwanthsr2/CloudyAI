@@ -17,8 +17,8 @@ const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
 const STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || 'privacloud-storage';
 
-export const USER_QUOTA_BYTES = 100 * 1024 * 1024; // 100 MB per-user quota
-export const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB per file
+export const USER_QUOTA_BYTES = (parseInt(process.env.USER_QUOTA_GB, 10) || 10) * 1024 * 1024 * 1024; // 10 GB per-user quota
+export const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB per file
 
 const isConfigured = 
   SUPABASE_URL.startsWith('http') && 

@@ -37,12 +37,18 @@ export default function UploadScan({ onUploadComplete, quota, files = [] }) {
 
   const totalStoredBytes = quota?.used_bytes !== undefined ? quota.used_bytes : files.reduce((acc, f) => acc + (f.size_bytes || 0), 0);
   const usedBytes = totalStoredBytes;
-  const maxBytes = 100 * 1024 * 1024;
-  const usedFormatted = totalStoredBytes < 1024 * 1024 
-    ? `${(totalStoredBytes / 1024).toFixed(1)} KB` 
-    : `${(totalStoredBytes / (1024 * 1024)).toFixed(2)} MB`;
+  const maxBytes = quota?.total_bytes || (10 * 1024 * 1024 * 1024); // 10 GB
+
+  const formatBytes = (bytes) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  };
+
+  const usedFormatted = formatBytes(totalStoredBytes);
+  const totalFormatted = formatBytes(maxBytes);
   const percentUsed = Math.min(100, (totalStoredBytes / maxBytes) * 100).toFixed(1);
-  const remainingMb = Math.max(0, (maxBytes - totalStoredBytes) / (1024 * 1024)).toFixed(1);
+  const remainingFormatted = formatBytes(Math.max(0, maxBytes - totalStoredBytes));
 
   const validateAndSelectFile = (file) => {
     setError(null);
@@ -59,17 +65,17 @@ export default function UploadScan({ onUploadComplete, quota, files = [] }) {
       return;
     }
 
-    // 2. Strict 5 MB limit
-    if (file.size > 5 * 1024 * 1024) {
-      setError(`File size (${(file.size / (1024 * 1024)).toFixed(2)} MB) exceeds the 5.0 MB maximum allowed limit.`);
+    // 2. Strict 25 MB limit
+    if (file.size > 25 * 1024 * 1024) {
+      setError(`File size (${(file.size / (1024 * 1024)).toFixed(2)} MB) exceeds the 25.0 MB maximum allowed limit.`);
       setSelectedFile(null);
       setPreviewUrl(null);
       return;
     }
 
-    // 3. Strict 100 MB user quota
-    if (usedBytes + file.size > 100 * 1024 * 1024) {
-      setError(`Storage Limit Exceeded: Uploading this file would exceed your 100 MB vault quota.`);
+    // 3. Strict 10 GB user quota
+    if (usedBytes + file.size > maxBytes) {
+      setError(`Storage Limit Exceeded: Uploading this file would exceed your ${totalFormatted} vault quota.`);
       setSelectedFile(null);
       setPreviewUrl(null);
       return;
@@ -189,12 +195,12 @@ export default function UploadScan({ onUploadComplete, quota, files = [] }) {
           </div>
           <div className="px-3 py-1.5 rounded-xl bg-cosmic-900 border border-cosmic-border flex items-center space-x-1.5 text-slate-300">
             <span className="w-2 h-2 rounded-full bg-violet-400" />
-            <span>Max: 5.0 MB</span>
+            <span>Max: 25.0 MB</span>
           </div>
           <div className="px-3 py-1.5 rounded-xl bg-cosmic-900 border border-violet-500/30 flex items-center space-x-2 text-cyan-300">
             <HardDrive className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="font-bold">{usedFormatted} / 100 MB Used</span>
-            <span className="text-[10px] text-slate-400">({remainingMb} MB Free)</span>
+            <span className="font-bold">{usedFormatted} / {totalFormatted} Used</span>
+            <span className="text-[10px] text-slate-400">({remainingFormatted} Free)</span>
           </div>
         </div>
       </div>
@@ -398,7 +404,7 @@ export default function UploadScan({ onUploadComplete, quota, files = [] }) {
                 <span>Vault Storage Meter</span>
               </span>
               <span className="font-mono text-cyan-300 font-bold text-[11px]">
-                {usedFormatted} / 100 MB ({percentUsed}%)
+                {usedFormatted} / {totalFormatted} ({percentUsed}%)
               </span>
             </div>
 

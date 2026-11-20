@@ -54,8 +54,8 @@ const generalLimiter = rateLimit({
 
 app.use('/api/', generalLimiter);
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '35mb' }));
+app.use(express.urlencoded({ extended: true, limit: '35mb' }));
 
 // Health Check
 app.get('/health', (req, res) => {
