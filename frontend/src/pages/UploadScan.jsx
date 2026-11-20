@@ -277,7 +277,7 @@ export default function UploadScan({ onUploadComplete, quota, files = [] }) {
                     <span>JPG, JPEG, PNG</span>
                   </span>
                   <span>•</span>
-                  <span>Up to 5 MB</span>
+                  <span>Up to 25 MB</span>
                   <span>•</span>
                   <span>Zero-Plaintext</span>
                 </div>
