@@ -79,8 +79,8 @@ function MyFilesView() {
 }
 
 function UploadScanView() {
-  const { refreshFiles, quota } = useOutletContext();
-  return <UploadScan onUploadComplete={refreshFiles} quota={quota} />;
+  const { refreshFiles, quota, files } = useOutletContext();
+  return <UploadScan onUploadComplete={refreshFiles} quota={quota} files={files} />;
 }
 
 function PrivacyAnalysisView() {

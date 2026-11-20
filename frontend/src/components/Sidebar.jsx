@@ -35,7 +35,9 @@ export default function Sidebar({ quota }) {
   ];
 
   const usedBytes = quota?.used_bytes || 0;
-  const usedMb = (usedBytes / (1024 * 1024)).toFixed(1);
+  const usedFormatted = usedBytes < 1024 * 1024
+    ? `${(usedBytes / 1024).toFixed(0)} KB`
+    : `${(usedBytes / (1024 * 1024)).toFixed(1)} MB`;
   const totalMb = 100;
   const percentUsed = Math.min(100, Math.round((usedBytes / (100 * 1024 * 1024)) * 100));
 
@@ -129,7 +131,7 @@ export default function Sidebar({ quota }) {
           </div>
 
           <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-            <span>{usedMb} MB used</span>
+            <span>{usedFormatted} used</span>
             <span>{totalMb} MB limit</span>
           </div>
         </div>

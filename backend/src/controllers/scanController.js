@@ -169,21 +169,27 @@ export async function getMaskedPreview(req, res) {
       file = await localStore.getFileById(id);
     }
 
-    if (!file || !file.storage_path_masked) {
-      return res.status(404).json({ success: false, error: 'No masked copy exists for this file.' });
+    if (!file) {
+      return res.status(404).json({ success: false, error: 'File record not found.' });
+    }
+
+    // If masked copy exists, serve masked copy; otherwise if file is clean, serve original clean copy as share-safe
+    const targetPath = file.storage_path_masked || file.storage_path_original;
+    if (!targetPath) {
+      return res.status(404).json({ success: false, error: 'No preview available for this file.' });
     }
 
     let buffer = null;
     if (isConfigured && supabase) {
-      const { data: blob } = await supabase.storage.from(STORAGE_BUCKET).download(file.storage_path_masked);
+      const { data: blob } = await supabase.storage.from(STORAGE_BUCKET).download(targetPath);
       const arr = await blob.arrayBuffer();
       buffer = Buffer.from(arr);
     } else {
-      const r = await localStore.downloadFile(file.storage_path_masked);
+      const r = await localStore.downloadFile(targetPath);
       buffer = r.data;
     }
 
-    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Type', file.mime_type || 'image/png');
     return res.send(buffer);
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });

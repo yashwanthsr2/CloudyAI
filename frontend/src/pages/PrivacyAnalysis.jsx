@@ -255,6 +255,9 @@ export default function PrivacyAnalysis({ files = [] }) {
                       src={maskedUrl}
                       alt="Redacted Document"
                       className="max-h-[500px] w-full object-contain rounded-lg"
+                      onError={(e) => {
+                        e.currentTarget.src = originalUrl;
+                      }}
                     />
                   ) : (
                     <p className="text-xs text-slate-400 font-mono">No masked version required (Clean document).</p>

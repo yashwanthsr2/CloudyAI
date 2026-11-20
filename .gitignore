@@ -14,3 +14,5 @@ pnpm-debug.log*
 coverage/
 temp/
 uploads/
+.local_storage/
+backend/.local_storage/

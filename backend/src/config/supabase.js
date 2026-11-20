@@ -1,8 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const STORE_DIR = path.resolve(__dirname, '../../.local_storage');
+const DB_FILE = path.join(STORE_DIR, 'db.json');
+const BLOBS_DIR = path.join(STORE_DIR, 'blobs');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
@@ -24,7 +33,7 @@ if (isConfigured) {
 }
 
 /**
- * High-fidelity in-memory transactional store for standalone demo & testing
+ * High-fidelity persistent & transactional local store for standalone demo & testing
  */
 class LocalStoreFallback {
   constructor() {
@@ -32,16 +41,77 @@ class LocalStoreFallback {
     this.shares = new Map();
     this.securityEvents = [];
     this.storageBlobs = new Map(); // path -> { buffer, mimeType }
+
+    this._initStorage();
+  }
+
+  _initStorage() {
+    try {
+      if (!fs.existsSync(STORE_DIR)) fs.mkdirSync(STORE_DIR, { recursive: true });
+      if (!fs.existsSync(BLOBS_DIR)) fs.mkdirSync(BLOBS_DIR, { recursive: true });
+
+      if (fs.existsSync(DB_FILE)) {
+        const raw = fs.readFileSync(DB_FILE, 'utf-8');
+        const data = JSON.parse(raw);
+        if (Array.isArray(data.files)) {
+          for (const f of data.files) this.files.set(f.id, f);
+        }
+        if (Array.isArray(data.shares)) {
+          for (const s of data.shares) this.shares.set(s.id, s);
+        }
+        if (Array.isArray(data.securityEvents)) {
+          this.securityEvents = data.securityEvents;
+        }
+      }
+    } catch (e) {
+      console.warn('LocalStore init warning:', e.message);
+    }
+  }
+
+  _persistDb() {
+    try {
+      const payload = {
+        files: Array.from(this.files.values()),
+        shares: Array.from(this.shares.values()),
+        securityEvents: this.securityEvents
+      };
+      fs.writeFileSync(DB_FILE, JSON.stringify(payload, null, 2), 'utf-8');
+    } catch (e) {
+      console.warn('LocalStore persist error:', e.message);
+    }
+  }
+
+  _getBlobFilePath(storagePath) {
+    const safeName = Buffer.from(storagePath).toString('hex');
+    return path.join(BLOBS_DIR, safeName);
   }
 
   // Storage
   async uploadFile(storagePath, buffer, mimeType) {
     this.storageBlobs.set(storagePath, { buffer, mimeType });
+    try {
+      const filePath = this._getBlobFilePath(storagePath);
+      fs.writeFileSync(filePath, buffer);
+    } catch (e) {
+      console.warn('Blob write error:', e.message);
+    }
     return { data: { path: storagePath }, error: null };
   }
 
   async downloadFile(storagePath) {
-    const file = this.storageBlobs.get(storagePath);
+    let file = this.storageBlobs.get(storagePath);
+    if (!file) {
+      try {
+        const filePath = this._getBlobFilePath(storagePath);
+        if (fs.existsSync(filePath)) {
+          const buffer = fs.readFileSync(filePath);
+          file = { buffer, mimeType: 'image/png' };
+          this.storageBlobs.set(storagePath, file);
+        }
+      } catch (e) {
+        console.warn('Blob read error:', e.message);
+      }
+    }
     if (!file) return { data: null, error: new Error('File not found in storage') };
     return { data: file.buffer, mimeType: file.mimeType, error: null };
   }
@@ -53,6 +123,7 @@ class LocalStoreFallback {
       uploaded_at: new Date().toISOString()
     };
     this.files.set(fileRecord.id, record);
+    this._persistDb();
     return record;
   }
 
@@ -61,6 +132,7 @@ class LocalStoreFallback {
     if (!file) return null;
     const updated = { ...file, ...updates };
     this.files.set(fileId, updated);
+    this._persistDb();
     return updated;
   }
 
@@ -78,8 +150,17 @@ class LocalStoreFallback {
     const file = this.files.get(fileId);
     if (file) {
       this.storageBlobs.delete(file.storage_path_original);
+      try {
+        const p1 = this._getBlobFilePath(file.storage_path_original);
+        if (fs.existsSync(p1)) fs.unlinkSync(p1);
+      } catch (e) {}
+
       if (file.storage_path_masked) {
         this.storageBlobs.delete(file.storage_path_masked);
+        try {
+          const p2 = this._getBlobFilePath(file.storage_path_masked);
+          if (fs.existsSync(p2)) fs.unlinkSync(p2);
+        } catch (e) {}
       }
       this.files.delete(fileId);
       // Remove associated shares
@@ -88,6 +169,7 @@ class LocalStoreFallback {
           this.shares.delete(sId);
         }
       }
+      this._persistDb();
     }
     return true;
   }
@@ -109,6 +191,7 @@ class LocalStoreFallback {
       created_at: new Date().toISOString()
     };
     this.shares.set(shareRecord.id, record);
+    this._persistDb();
     return record;
   }
 
@@ -117,6 +200,7 @@ class LocalStoreFallback {
     if (!share) return null;
     const updated = { ...share, ...updates };
     this.shares.set(shareId, updated);
+    this._persistDb();
     return updated;
   }
 
@@ -143,6 +227,7 @@ class LocalStoreFallback {
       created_at: new Date().toISOString()
     };
     this.securityEvents.unshift(event);
+    this._persistDb();
     return event;
   }
 

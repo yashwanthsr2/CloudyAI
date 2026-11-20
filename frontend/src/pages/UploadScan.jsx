@@ -23,7 +23,7 @@ import {
 import { api } from '../services/api';
 import RiskBadge from '../components/RiskBadge';
 
-export default function UploadScan({ onUploadComplete, quota }) {
+export default function UploadScan({ onUploadComplete, quota, files = [] }) {
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -35,8 +35,13 @@ export default function UploadScan({ onUploadComplete, quota }) {
 
   const navigate = useNavigate();
 
-  const usedBytes = quota?.used_bytes || 0;
-  const remainingMb = Math.max(0, ((100 * 1024 * 1024 - usedBytes) / (1024 * 1024))).toFixed(1);
+  const totalStoredBytes = quota?.used_bytes !== undefined ? quota.used_bytes : files.reduce((acc, f) => acc + (f.size_bytes || 0), 0);
+  const maxBytes = 100 * 1024 * 1024;
+  const usedFormatted = totalStoredBytes < 1024 * 1024 
+    ? `${(totalStoredBytes / 1024).toFixed(1)} KB` 
+    : `${(totalStoredBytes / (1024 * 1024)).toFixed(2)} MB`;
+  const percentUsed = Math.min(100, (totalStoredBytes / maxBytes) * 100).toFixed(1);
+  const remainingMb = Math.max(0, (maxBytes - totalStoredBytes) / (1024 * 1024)).toFixed(1);
 
   const validateAndSelectFile = (file) => {
     setError(null);
@@ -185,9 +190,10 @@ export default function UploadScan({ onUploadComplete, quota }) {
             <span className="w-2 h-2 rounded-full bg-violet-400" />
             <span>Max: 5.0 MB</span>
           </div>
-          <div className="px-3 py-1.5 rounded-xl bg-cosmic-900 border border-cosmic-border flex items-center space-x-1.5 text-emerald-400">
-            <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
-            <span>{remainingMb} MB Free</span>
+          <div className="px-3 py-1.5 rounded-xl bg-cosmic-900 border border-violet-500/30 flex items-center space-x-2 text-cyan-300">
+            <HardDrive className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="font-bold">{usedFormatted} / 100 MB Used</span>
+            <span className="text-[10px] text-slate-400">({remainingMb} MB Free)</span>
           </div>
         </div>
       </div>
@@ -382,6 +388,50 @@ export default function UploadScan({ onUploadComplete, quota }) {
             </p>
           </div>
 
+          {/* Stored Vault Status & Inventory Card */}
+          <div className="p-4 rounded-xl bg-cosmic-900/70 border border-cosmic-border text-xs space-y-3.5">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-200 font-semibold text-[11px] flex items-center space-x-1.5">
+                <HardDrive className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Vault Storage Meter</span>
+              </span>
+              <span className="font-mono text-cyan-300 font-bold text-[11px]">
+                {usedFormatted} / 100 MB ({percentUsed}%)
+              </span>
+            </div>
+
+            {/* Storage Progress Bar */}
+            <div className="w-full bg-cosmic-950 h-2.5 rounded-full overflow-hidden border border-cosmic-border/60">
+              <div 
+                className="h-full bg-gradient-to-r from-cyan-400 via-violet-500 to-indigo-500 rounded-full transition-all duration-500"
+                style={{ width: `${Math.max(2, parseFloat(percentUsed))}%` }}
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+              <span className="text-emerald-400 font-semibold">✓ {files.length} Documents in Vault</span>
+              <Link to="/files" className="text-violet-400 hover:text-cyan-300 font-bold transition-colors inline-flex items-center space-x-1">
+                <span>View Drive</span>
+                <ArrowRight className="w-3 h-3" />
+              </Link>
+            </div>
+
+            {files.length > 0 && (
+              <div className="pt-2 border-t border-cosmic-border/60 space-y-1.5">
+                <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Recent Stored Files:</span>
+                {files.slice(0, 3).map((f) => (
+                  <div key={f.id} className="flex items-center justify-between p-2 rounded-lg bg-cosmic-950/60 border border-cosmic-border text-[11px]">
+                    <span className="text-slate-200 truncate max-w-[170px]" title={f.filename}>{f.filename}</span>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <span className="text-slate-400 font-mono text-[10px]">{(f.size_bytes / 1024).toFixed(0)} KB</span>
+                      <RiskBadge level={f.risk_level} size="sm" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
         </div>
 
         {/* RIGHT COLUMN: Results OR Engine Specifications (6 or 7 cols) */}
@@ -402,6 +452,20 @@ export default function UploadScan({ onUploadComplete, quota }) {
                   </h3>
                 </div>
                 <RiskBadge level={scanResult.file.risk_level} size="lg" />
+              </div>
+
+              {/* Storage Confirmation Banner */}
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center justify-between text-xs text-emerald-300">
+                <div className="flex items-center space-x-2 min-w-0">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="truncate"><strong>Stored in Vault:</strong> "{scanResult.file.filename}" is safely saved.</span>
+                </div>
+                <Link
+                  to="/files"
+                  className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 font-mono text-[10px] font-bold transition-colors inline-flex items-center space-x-1 shrink-0 ml-2"
+                >
+                  <span>My Files ({files.length}) &rarr;</span>
+                </Link>
               </div>
 
               {/* Detected Entity Counters */}
@@ -475,17 +539,22 @@ export default function UploadScan({ onUploadComplete, quota }) {
                     </div>
                   </div>
 
-                  {/* Redacted (Public Safe Copy) */}
+                  {/* Redacted or Clean (Public Safe Copy) */}
                   <div className="p-2.5 bg-cosmic-950/80 rounded-xl border border-violet-500/30 space-y-1.5">
                     <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                      <span>Protected Masked Copy</span>
-                      <span className="text-emerald-400 font-semibold">Share Safe</span>
+                      <span>{scanResult.file.storage_path_masked ? 'Protected Masked Copy' : 'Verified Clean Copy'}</span>
+                      <span className="text-emerald-400 font-semibold">
+                        {scanResult.file.storage_path_masked ? 'Share Safe (Redacted)' : 'Share Safe (Clean)'}
+                      </span>
                     </div>
                     <div className="h-32 bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center border border-slate-800">
                       <img 
                         src={api.getMaskedPreviewUrl(scanResult.file.id)} 
-                        alt="Masked" 
+                        alt={scanResult.file.storage_path_masked ? "Protected Masked Copy" : "Verified Clean Copy"}
                         className="w-full h-full object-contain"
+                        onError={(e) => {
+                          e.currentTarget.src = api.getOriginalPreviewUrl(scanResult.file.id);
+                        }}
                       />
                     </div>
                   </div>
