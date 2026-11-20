@@ -9,6 +9,7 @@ import scanRoutes from './routes/scanRoutes.js';
 import shareRoutes from './routes/shareRoutes.js';
 import transferRoutes from './routes/transferRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
+import authRoutes from './routes/authRoutes.js';
 import { uploadFile } from './controllers/fileController.js';
 import { upload } from './middleware/uploadMiddleware.js';
 import { requireAuth } from './middleware/authMiddleware.js';
@@ -17,33 +18,20 @@ dotenv.config();
 
 const app = express();
 
+// Request Logger
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // Security Headers
 app.use(helmet({
   crossOriginResourcePolicy: false // Allow masked preview images to load across origins
 }));
 
-// CORS configuration
-const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:5173',
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173'
-];
-
+// CORS configuration - Allow all local & deployed frontends
 app.use(cors({
-  origin: (origin, callback) => {
-    if (
-      !origin || 
-      allowedOrigins.includes(origin) || 
-      /\.vercel\.app$/.test(origin) || 
-      /\.netlify\.app$/.test(origin) || 
-      process.env.NODE_ENV !== 'production'
-    ) {
-      callback(null, true);
-    } else {
-      callback(new Error('Blocked by CORS policy'));
-    }
-  },
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-demo-user-id']
@@ -76,6 +64,7 @@ app.get('/health', (req, res) => {
 app.post('/api/upload', requireAuth, upload.single('file'), uploadFile);
 
 // API Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/scan', scanRoutes);
 app.use('/api/share', shareRoutes);

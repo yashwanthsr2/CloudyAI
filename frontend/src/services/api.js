@@ -4,8 +4,8 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
  * PRIVACLOUD AI HTTP Request Client
  */
 export async function apiRequest(endpoint, options = {}) {
-  const token = localStorage.getItem('privacloud_token');
-  const demoUserId = localStorage.getItem('privacloud_demo_user');
+  const token = sessionStorage.getItem('privacloud_token') || localStorage.getItem('privacloud_token');
+  const demoUserId = sessionStorage.getItem('privacloud_demo_user') || localStorage.getItem('privacloud_demo_user');
 
   const headers = {
     ...options.headers,
@@ -53,6 +53,11 @@ export async function apiRequest(endpoint, options = {}) {
 }
 
 export const api = {
+  // Authentication
+  login: (email, password) => apiRequest('/auth/login', { method: 'POST', body: { email, password } }),
+  signup: (email, password, name) => apiRequest('/auth/signup', { method: 'POST', body: { email, password, name } }),
+  getMe: () => apiRequest('/auth/me'),
+
   // Files & Quota
   uploadFile: (formData) => apiRequest('/upload', { method: 'POST', body: formData }),
   getFiles: () => apiRequest('/files'),
@@ -62,8 +67,18 @@ export const api = {
 
   // Scanning & Previews
   scanFile: (id) => apiRequest(`/scan/${id}`, { method: 'POST' }),
-  getMaskedPreviewUrl: (id) => `${API_BASE_URL}/scan/${id}/masked`,
-  getOriginalPreviewUrl: (id) => `${API_BASE_URL}/scan/${id}/original`,
+  getMaskedPreviewUrl: (id) => {
+    const token = sessionStorage.getItem('privacloud_token') || localStorage.getItem('privacloud_token');
+    const demoId = sessionStorage.getItem('privacloud_demo_user') || localStorage.getItem('privacloud_demo_user');
+    const authQuery = token ? `token=${encodeURIComponent(token)}` : demoId ? `demoUserId=${encodeURIComponent(demoId)}` : '';
+    return `${API_BASE_URL}/scan/${id}/masked${authQuery ? `?${authQuery}` : ''}`;
+  },
+  getOriginalPreviewUrl: (id) => {
+    const token = sessionStorage.getItem('privacloud_token') || localStorage.getItem('privacloud_token');
+    const demoId = sessionStorage.getItem('privacloud_demo_user') || localStorage.getItem('privacloud_demo_user');
+    const authQuery = token ? `token=${encodeURIComponent(token)}` : demoId ? `demoUserId=${encodeURIComponent(demoId)}` : '';
+    return `${API_BASE_URL}/scan/${id}/original${authQuery ? `?${authQuery}` : ''}`;
+  },
 
   // Secure Sharing (Sender)
   createShare: (id, recipientEmail) => apiRequest(`/share/${id}`, {

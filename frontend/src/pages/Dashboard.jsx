@@ -56,6 +56,7 @@ export default function Dashboard({ files = [], quota = null, onRefresh }) {
   };
   const usedFormatted = formatBytes(usedBytes);
   const totalFormatted = formatBytes(totalBytes);
+  const remainingFormatted = formatBytes(Math.max(0, totalBytes - usedBytes));
   const percentUsed = Math.min(100, Math.round((usedBytes / totalBytes) * 100));
 
   const recentFiles = files.slice(0, 5);
@@ -138,7 +139,7 @@ export default function Dashboard({ files = [], quota = null, onRefresh }) {
           </div>
 
           <p className="text-[10px] text-slate-400 font-mono">
-            {remainingMb} MB remaining in private bucket
+            {remainingFormatted} remaining in private bucket
           </p>
         </div>
 
@@ -157,7 +158,7 @@ export default function Dashboard({ files = [], quota = null, onRefresh }) {
           <div>
             <p className="text-2xl font-bold font-mono text-white">{files.length}</p>
             <p className="text-[10px] text-slate-400 font-mono mt-1">
-              JPG/PNG formats • 5 MB max per file
+              JPG/PNG formats • 25 MB max per file
             </p>
           </div>
 

@@ -13,8 +13,14 @@ export default function Login() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const { loginWithPassword, signupWithPassword } = useAuth();
+  const { user, loginWithPassword, signupWithPassword } = useAuth();
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    if (user) {
+      navigate('/', { replace: true });
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -102,8 +108,17 @@ export default function Login() {
         </div>
 
         {error && (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs rounded-xl mb-4 font-medium">
-            {error}
+          <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs rounded-xl mb-4 font-medium flex items-center justify-between">
+            <span>{error}</span>
+            {error.includes('already exists') && isSignup && (
+              <button
+                type="button"
+                onClick={() => { setIsSignup(false); setError(null); }}
+                className="ml-2 text-cyan-300 underline font-bold shrink-0 hover:text-cyan-200"
+              >
+                Switch to Sign In →
+              </button>
+            )}
           </div>
         )}
 

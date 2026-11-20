@@ -540,9 +540,14 @@ export default function UploadScan({ onUploadComplete, quota, files = [] }) {
                     </div>
                     <div className="h-32 bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center border border-slate-800">
                       <img 
-                        src={api.getOriginalPreviewUrl(scanResult.file.id)} 
-                        alt="Original" 
+                        src={previewUrl || api.getOriginalPreviewUrl(scanResult.file.id)} 
+                        alt="Vault Original Document" 
                         className="w-full h-full object-contain"
+                        onError={(e) => {
+                          if (previewUrl && e.currentTarget.src !== previewUrl) {
+                            e.currentTarget.src = previewUrl;
+                          }
+                        }}
                       />
                     </div>
                   </div>
@@ -557,11 +562,13 @@ export default function UploadScan({ onUploadComplete, quota, files = [] }) {
                     </div>
                     <div className="h-32 bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center border border-slate-800">
                       <img 
-                        src={api.getMaskedPreviewUrl(scanResult.file.id)} 
+                        src={scanResult.file.storage_path_masked ? api.getMaskedPreviewUrl(scanResult.file.id) : (previewUrl || api.getMaskedPreviewUrl(scanResult.file.id))} 
                         alt={scanResult.file.storage_path_masked ? "Protected Masked Copy" : "Verified Clean Copy"}
                         className="w-full h-full object-contain"
                         onError={(e) => {
-                          e.currentTarget.src = api.getOriginalPreviewUrl(scanResult.file.id);
+                          if (previewUrl && e.currentTarget.src !== previewUrl) {
+                            e.currentTarget.src = previewUrl;
+                          }
                         }}
                       />
                     </div>
@@ -635,6 +642,37 @@ export default function UploadScan({ onUploadComplete, quota, files = [] }) {
                       </p>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Zero-Trust Processing Pipeline & Enclave Highlights */}
+              <div className="p-4 bg-cosmic-950/70 rounded-xl border border-cosmic-border space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-mono text-slate-300 font-semibold flex items-center space-x-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Zero-Trust Processing Pipeline</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-mono">End-to-End Enclave</span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="p-2.5 rounded-lg bg-cosmic-900 border border-cosmic-border/60">
+                    <p className="text-[10px] font-mono text-cyan-300 font-bold">01. INGEST</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">RAM Buffering</p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-cosmic-900 border border-cosmic-border/60">
+                    <p className="text-[10px] font-mono text-violet-300 font-bold">02. OCR SCAN</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Regex DLP</p>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-cosmic-900 border border-cosmic-border/60">
+                    <p className="text-[10px] font-mono text-emerald-300 font-bold">03. SHARE</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">OTP + 1-Time Use</p>
+                  </div>
+                </div>
+
+                <div className="pt-1 flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                  <span>Atomic Link Invalidation: <strong className="text-white">HTTP 410</strong></span>
+                  <span className="text-cyan-400">Strict Cryptographic TTL</span>
                 </div>
               </div>
 

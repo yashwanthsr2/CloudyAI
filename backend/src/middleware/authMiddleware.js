@@ -1,59 +1,63 @@
 import { isConfigured, supabase } from '../config/supabase.js';
+import { verifyAuthToken } from '../utils/authUtils.js';
 
 /**
  * Authentication Middleware
- * Validates Supabase JWT from Authorization header.
- * Provides fallback mock user for local testing if Supabase is not yet configured.
+ * Validates cryptographically signed local enclave tokens or Supabase JWTs.
+ * Supports Bearer header, x-demo-user-id, and ?token= query parameter (for media/image tags).
  */
 export async function requireAuth(req, res, next) {
   try {
-    const authHeader = req.headers.authorization;
-    
-    // Check for demo bypass header in dev/test
-    if (req.headers['x-demo-user-id']) {
+    // 1. Check for explicit demo / dev user header or query param
+    const demoUserId = req.headers['x-demo-user-id'] || req.query.demoUserId;
+    if (demoUserId) {
       req.user = {
-        id: req.headers['x-demo-user-id'],
-        email: 'user@privacloud.ai'
+        id: demoUserId,
+        email: req.headers['x-demo-user-email'] || req.query.demoUserEmail || 'demo@privacloud.ai'
       };
       return next();
     }
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      // In offline/local mode without Supabase, provide a default demo user so reviewer can test immediately
-      if (!isConfigured) {
-        req.user = {
-          id: '00000000-0000-0000-0000-000000000001',
-          email: 'demo@privacloud.ai'
-        };
-        return next();
-      }
+    // 2. Extract token from Authorization header OR ?token= query parameter
+    let token = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (req.query && req.query.token) {
+      token = req.query.token;
+    }
 
+    if (!token) {
       return res.status(401).json({
         success: false,
-        error: 'Unauthorized. Bearer token is required.'
+        error: 'Unauthorized. Authentication token is required.'
       });
     }
 
-    const token = authHeader.split(' ')[1];
-
-    if (isConfigured && supabase) {
-      const { data: { user }, error } = await supabase.auth.getUser(token);
-      if (error || !user) {
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid or expired session token.'
-        });
-      }
-      req.user = user;
-      return next();
-    } else {
-      // Local development token fallback
+    // 3. Validate Local Enclave Auth Token (PBKDF2/HMAC-SHA256)
+    const localPayload = verifyAuthToken(token);
+    if (localPayload) {
       req.user = {
-        id: '00000000-0000-0000-0000-000000000001',
-        email: 'demo@privacloud.ai'
+        id: localPayload.id,
+        email: localPayload.email,
+        name: localPayload.name
       };
       return next();
     }
+
+    // 4. Validate Supabase Session Token if Supabase is active
+    if (isConfigured && supabase) {
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      if (!error && user) {
+        req.user = user;
+        return next();
+      }
+    }
+
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid or expired session token. Please log in again.'
+    });
   } catch (err) {
     console.error('Auth middleware error:', err);
     return res.status(401).json({

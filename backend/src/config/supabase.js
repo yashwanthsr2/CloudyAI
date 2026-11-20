@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { hashPassword } from '../utils/authUtils.js';
 
 dotenv.config();
 
@@ -39,6 +40,7 @@ class LocalStoreFallback {
   constructor() {
     this.files = new Map();
     this.shares = new Map();
+    this.users = new Map();
     this.securityEvents = [];
     this.storageBlobs = new Map(); // path -> { buffer, mimeType }
 
@@ -59,9 +61,36 @@ class LocalStoreFallback {
         if (Array.isArray(data.shares)) {
           for (const s of data.shares) this.shares.set(s.id, s);
         }
+        if (Array.isArray(data.users)) {
+          for (const u of data.users) this.users.set(u.id, u);
+        }
         if (Array.isArray(data.securityEvents)) {
           this.securityEvents = data.securityEvents;
         }
+      }
+
+      // Auto-seed default demo users if users list is empty
+      if (this.users.size === 0) {
+        const demoCreds = hashPassword('demo-vault-password');
+        const demoOfficer = {
+          id: '00000000-0000-0000-0000-000000000001',
+          email: 'security.officer@privacloud.ai',
+          name: 'Security Officer',
+          password_hash: demoCreds.hash,
+          salt: demoCreds.salt,
+          created_at: new Date().toISOString()
+        };
+        const demoDev = {
+          id: '00000000-0000-0000-0000-000000000002',
+          email: 'demo.developer@privacloud.ai',
+          name: 'Demo Developer',
+          password_hash: demoCreds.hash,
+          salt: demoCreds.salt,
+          created_at: new Date().toISOString()
+        };
+        this.users.set(demoOfficer.id, demoOfficer);
+        this.users.set(demoDev.id, demoDev);
+        this._persistDb();
       }
     } catch (e) {
       console.warn('LocalStore init warning:', e.message);
@@ -71,6 +100,7 @@ class LocalStoreFallback {
   _persistDb() {
     try {
       const payload = {
+        users: Array.from(this.users.values()),
         files: Array.from(this.files.values()),
         shares: Array.from(this.shares.values()),
         securityEvents: this.securityEvents
@@ -79,6 +109,28 @@ class LocalStoreFallback {
     } catch (e) {
       console.warn('LocalStore persist error:', e.message);
     }
+  }
+
+  // Users
+  async findUserByEmail(email) {
+    if (!email) return null;
+    const cleanEmail = email.trim().toLowerCase();
+    for (const u of this.users.values()) {
+      if (u.email && u.email.toLowerCase() === cleanEmail) {
+        return u;
+      }
+    }
+    return null;
+  }
+
+  async getUserById(id) {
+    return this.users.get(id) || null;
+  }
+
+  async insertUser(userRecord) {
+    this.users.set(userRecord.id, userRecord);
+    this._persistDb();
+    return userRecord;
   }
 
   _getBlobFilePath(storagePath) {
