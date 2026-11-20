@@ -32,10 +32,9 @@ export default function Navbar() {
             </div>
             <div>
               <div className="flex items-center space-x-1.5">
-                <span className="font-bold text-lg text-white tracking-tight">PRIVACLOUD</span>
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">AI</span>
+                <span className="font-bold text-lg text-white tracking-tight">AI CLOUD DRIVE</span>
               </div>
-              <p className="text-[11px] text-slate-400 -mt-1 hidden sm:block">Privacy-Aware Secure Storage</p>
+              <p className="text-[11px] text-slate-400 -mt-1 hidden sm:block">Privacy-Aware Cloud Storage</p>
             </div>
           </Link>
 

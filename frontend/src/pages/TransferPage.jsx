@@ -237,8 +237,8 @@ export default function TransferPage() {
               </div>
             </div>
             <div>
-              <span className="font-extrabold text-xs text-white tracking-wider">PRIVACLOUD AI</span>
-              <span className="text-[10px] text-slate-400 block -mt-0.5 font-mono">Zero-Trust Ephemeral Portal</span>
+              <span className="font-extrabold text-xs text-white tracking-wider">AI CLOUD DRIVE</span>
+              <span className="text-[10px] text-slate-400 block -mt-0.5 font-mono">Privacy-Aware Cloud Storage</span>
             </div>
           </div>
 

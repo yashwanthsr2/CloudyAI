@@ -41,7 +41,7 @@ function ProtectedLayout() {
       <div className="min-h-screen bg-cosmic-950 flex items-center justify-center">
         <div className="flex flex-col items-center space-y-4">
           <div className="w-10 h-10 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs text-slate-400 font-mono tracking-wide">Initializing PrivaCloud Security Enclave...</p>
+          <p className="text-xs text-slate-400 font-mono tracking-wide">Initializing AI CLOUD DRIVE Security Enclave...</p>
         </div>
       </div>
     );

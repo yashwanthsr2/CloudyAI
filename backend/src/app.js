@@ -61,7 +61,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
-    service: 'PRIVACLOUD AI Enterprise Backend',
+    service: 'AI CLOUD DRIVE — Privacy-Aware Cloud Storage',
     timestamp: new Date().toISOString()
   });
 });

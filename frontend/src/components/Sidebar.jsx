@@ -58,12 +58,11 @@ export default function Sidebar({ quota }) {
           </div>
           <div className="min-w-0">
             <div className="flex items-center space-x-1.5">
-              <span className="font-extrabold text-sm tracking-wider text-white">PRIVACLOUD</span>
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-500/20 text-cyan-300 border border-violet-500/30 font-mono">AI</span>
+              <span className="font-extrabold text-sm tracking-wider text-white">AI CLOUD DRIVE</span>
             </div>
             <p className="text-[10px] text-slate-400 tracking-tight truncate flex items-center space-x-1">
               <Lock className="w-2.5 h-2.5 text-emerald-400 inline shrink-0" />
-              <span>Zero-Plaintext Vault</span>
+              <span>Privacy-Aware Cloud Storage</span>
             </p>
           </div>
         </div>

@@ -596,7 +596,7 @@ export default function UploadScan({ onUploadComplete, quota, files = [] }) {
               {/* Detection Specs */}
               <div className="space-y-3">
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  PRIVACLOUD AI applies automated OCR pattern discovery and deterministic regular expression scanning to neutralize document credential leakage:
+                  AI CLOUD DRIVE applies automated OCR pattern discovery and deterministic regular expression scanning to neutralize document credential leakage:
                 </p>
 
                 <div className="space-y-2">

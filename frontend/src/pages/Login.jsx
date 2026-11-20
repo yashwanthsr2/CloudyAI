@@ -74,10 +74,9 @@ export default function Login() {
             </div>
           </div>
           <div className="flex items-center justify-center space-x-1.5">
-            <h1 className="text-2xl font-extrabold text-white tracking-wider">PRIVACLOUD</h1>
-            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-violet-500/20 text-cyan-300 border border-violet-500/30 font-mono">AI</span>
+            <h1 className="text-2xl font-extrabold text-white tracking-wider">AI CLOUD DRIVE</h1>
           </div>
-          <p className="text-xs text-slate-400 mt-1">Your Cloud. Your Privacy. Your Control.</p>
+          <p className="text-xs text-slate-400 mt-1">Privacy-Aware Cloud Storage</p>
         </div>
 
         {/* Tab Switcher */}

@@ -39,7 +39,7 @@ export default function Signup() {
             <Shield className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-extrabold text-white tracking-tight">Create Account</h1>
-          <p className="text-xs text-slate-400 mt-1">Join PRIVACLOUD AI for privacy-first cloud storage</p>
+          <p className="text-xs text-slate-400 mt-1">AI CLOUD DRIVE — Privacy-Aware Cloud Storage</p>
         </div>
 
         {error && (

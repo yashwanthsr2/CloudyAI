@@ -177,7 +177,7 @@ export default function Analytics() {
             <h3 className="text-sm font-bold text-white">Privacy-Safe Storage Architecture</h3>
           </div>
           <p className="text-xs text-slate-300 leading-relaxed mb-4">
-            PRIVACLOUD AI enforces mathematical zero-knowledge privacy guarantees. Raw Aadhaar numbers, PAN identifiers, email addresses, and phone numbers are parsed entirely in transient memory during the OCR execution phase.
+            AI CLOUD DRIVE enforces mathematical zero-knowledge privacy guarantees. Raw Aadhaar numbers, PAN identifiers, email addresses, and phone numbers are parsed entirely in transient memory during the OCR execution phase.
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
