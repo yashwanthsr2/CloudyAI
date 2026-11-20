@@ -32,7 +32,13 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+    if (
+      !origin || 
+      allowedOrigins.includes(origin) || 
+      /\.vercel\.app$/.test(origin) || 
+      /\.netlify\.app$/.test(origin) || 
+      process.env.NODE_ENV !== 'production'
+    ) {
       callback(null, true);
     } else {
       callback(new Error('Blocked by CORS policy'));
