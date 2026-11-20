@@ -4,27 +4,41 @@
 
 @layer base {
   body {
-    @apply bg-cosmic-950 text-slate-100 font-sans antialiased selection:bg-indigo-500/30 selection:text-indigo-300;
-    background-color: #060911;
+    @apply bg-cosmic-950 text-slate-100 font-sans antialiased selection:bg-violet-600/30 selection:text-violet-200;
+    background-color: #080b12;
+    /* Subtle cybersecurity mesh background */
+    background-image: 
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(124, 58, 237, 0.12), transparent),
+      radial-gradient(ellipse 60% 40% at 90% 90%, rgba(6, 182, 212, 0.06), transparent);
+    background-attachment: fixed;
   }
 }
 
-/* Glassmorphism Card Utility */
-.glass-panel {
-  background: rgba(15, 21, 38, 0.7);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+/* Layered Glassmorphic Card Utilities */
+.cyber-panel {
+  background: rgba(13, 18, 31, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.glass-panel-hover {
-  transition: all 0.2s ease-in-out;
+.cyber-panel-elevated {
+  background: rgba(17, 23, 40, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 36px -12px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
-.glass-panel-hover:hover {
-  background: rgba(20, 28, 51, 0.85);
-  border-color: rgba(99, 102, 241, 0.3);
+
+.cyber-card-interactive {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cyber-card-interactive:hover {
+  background: rgba(22, 31, 54, 0.95);
+  border-color: rgba(139, 92, 246, 0.4);
   transform: translateY(-2px);
-  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.7), 0 0 20px -4px rgba(124, 58, 237, 0.2);
 }
 
 /* Custom Scrollbar */
@@ -34,36 +48,44 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #0a0e1a;
+  background: #080b12;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e294b;
+  background: #1c2744;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #312e81;
+  background: #243258;
 }
 
-/* Radar Scan Line Animation */
-@keyframes radar-scan {
-  0% { top: 0%; opacity: 0.8; }
-  50% { top: 100%; opacity: 0.8; }
-  100% { top: 0%; opacity: 0.8; }
+/* Radar Scan Line Animation for OCR Dropzone */
+@keyframes cyber-radar {
+  0% {
+    top: 0%;
+    opacity: 0.9;
+  }
+  50% {
+    top: 96%;
+    opacity: 0.9;
+  }
+  100% {
+    top: 0%;
+    opacity: 0.9;
+  }
 }
 
-.animate-radar-scan {
-  animation: radar-scan 3s ease-in-out infinite;
+.animate-cyber-radar {
+  animation: cyber-radar 3.2s ease-in-out infinite;
 }
 
-/* Cosmic particle canvas container */
-.cosmic-stars {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 0;
+/* Subtle Pulse Glow */
+@keyframes subtle-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+.animate-subtle-glow {
+  animation: subtle-glow 4s ease-in-out infinite;
 }

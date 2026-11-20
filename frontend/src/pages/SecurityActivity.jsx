@@ -14,7 +14,9 @@ import {
   Clock, 
   AlertTriangle,
   Ban,
-  RefreshCw
+  RefreshCw,
+  Lock,
+  Layers
 } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -47,150 +49,159 @@ export default function SecurityActivity() {
 
   const getEventIcon = (type) => {
     switch (type) {
-      case 'FILE_UPLOAD': return <Upload className="w-4 h-4 text-indigo-400" />;
-      case 'SCAN_COMPLETED': return <Scan className="w-4 h-4 text-blue-400" />;
+      case 'FILE_UPLOAD': return <Upload className="w-4 h-4 text-violet-400" />;
+      case 'SCAN_COMPLETED': return <Scan className="w-4 h-4 text-cyan-400" />;
       case 'MASK_CREATED': return <FileCheck className="w-4 h-4 text-emerald-400" />;
-      case 'SHARE_CREATED': return <Share2 className="w-4 h-4 text-purple-400" />;
+      case 'SHARE_CREATED': return <Share2 className="w-4 h-4 text-violet-400" />;
       case 'SHARE_REVOKED': return <Ban className="w-4 h-4 text-rose-400" />;
       case 'OTP_REQUESTED': return <KeyRound className="w-4 h-4 text-amber-400" />;
       case 'OTP_VERIFIED': return <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
       case 'OTP_REJECTED': return <XCircle className="w-4 h-4 text-rose-400" />;
-      case 'DOWNLOAD_COMPLETED': return <Download className="w-4 h-4 text-teal-400" />;
+      case 'DOWNLOAD_COMPLETED': return <Download className="w-4 h-4 text-cyan-400" />;
       case 'ACCESS_DENIED': return <AlertTriangle className="w-4 h-4 text-rose-400" />;
       case 'LINK_EXPIRED': return <Clock className="w-4 h-4 text-slate-400" />;
       default: return <ShieldAlert className="w-4 h-4 text-slate-400" />;
     }
   };
 
-  const filteredEvents = events.filter((ev) => {
-    if (!search) return true;
-    const s = search.toLowerCase();
-    const type = (ev.event_type || '').toLowerCase();
-    const meta = JSON.stringify(ev.safe_metadata || {}).toLowerCase();
-    return type.includes(s) || meta.includes(s);
+  const filteredEvents = events.filter((e) => {
+    if (search) {
+      const s = search.toLowerCase();
+      const matchType = (e.event_type || '').toLowerCase().includes(s);
+      const matchStatus = (e.event_status || '').toLowerCase().includes(s);
+      const matchMeta = JSON.stringify(e.safe_metadata || {}).toLowerCase().includes(s);
+      if (!matchType && !matchStatus && !matchMeta) return false;
+    }
+    return true;
   });
 
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-6">
+    <div className="p-8 max-w-7xl mx-auto space-y-6">
       
-      {/* Title */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Page Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-cosmic-border/60">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center space-x-2.5">
-            <ShieldAlert className="w-6 h-6 text-indigo-400" />
-            <span>Security Activity & Audit Log</span>
+          <div className="flex items-center space-x-2">
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-violet-500/20 text-cyan-300 border border-violet-500/30">
+              AUDIT LOG
+            </span>
+            <span className="text-slate-400 text-xs">• Immutable Record Stream</span>
+          </div>
+          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center space-x-2.5 mt-1">
+            <ShieldAlert className="w-6 h-6 text-violet-400" />
+            <span>Security Activity & Audit Trail</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Immutable security telemetry recording every upload, scan, OTP verification, access attempt, and one-time download event.
+            Chronological audit log tracking ingestions, OCR scans, pixel redactions, OTP challenges, and atomic download claims.
           </p>
         </div>
 
         <button
           onClick={loadEvents}
-          className="p-2.5 bg-cosmic-900 border border-cosmic-border rounded-xl text-slate-300 hover:text-white transition-colors self-start sm:self-auto"
-          title="Refresh Events"
+          className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl bg-cosmic-900 border border-cosmic-border text-xs text-slate-300 hover:text-white transition-colors self-start md:self-auto"
         >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-400' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          <span>Refresh Audit Stream</span>
         </button>
       </div>
 
-      {/* Filter and Search Bar (Reference 6) */}
-      <div className="glass-panel rounded-2xl p-4 border border-cosmic-border flex flex-col sm:flex-row items-center gap-3">
-        {/* Search Input */}
-        <div className="relative flex-1 w-full">
-          <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Search */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search security log by event or metadata..."
-            className="w-full pl-9 pr-4 py-2 bg-cosmic-950/80 border border-cosmic-border rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+            placeholder="Search event type, status, metadata..."
+            className="w-full pl-9 pr-4 py-2 bg-cosmic-900 border border-cosmic-border rounded-xl text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-violet-500/60 font-medium"
           />
         </div>
 
-        {/* Type Filter */}
-        <div className="flex items-center space-x-2 w-full sm:w-auto">
-          <Filter className="w-4 h-4 text-slate-500 shrink-0" />
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="px-3 py-2 bg-cosmic-950/80 border border-cosmic-border rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500 w-full sm:w-auto font-mono"
-          >
-            <option value="ALL">All Event Types</option>
-            <option value="FILE_UPLOAD">File Uploads</option>
-            <option value="SCAN_COMPLETED">DLP Scans</option>
-            <option value="MASK_CREATED">Mask Redactions</option>
-            <option value="SHARE_CREATED">Shares Created</option>
-            <option value="OTP_REQUESTED">OTP Requests</option>
-            <option value="OTP_VERIFIED">OTP Verifications</option>
-            <option value="DOWNLOAD_COMPLETED">Downloads</option>
-            <option value="ACCESS_DENIED">Access Denied</option>
-            <option value="LINK_EXPIRED">Link Expirations</option>
-          </select>
-
-          {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 bg-cosmic-950/80 border border-cosmic-border rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500 w-full sm:w-auto font-mono"
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="SUCCESS">SUCCESS</option>
-            <option value="FAILURE">FAILURE</option>
-            <option value="WARNING">WARNING</option>
-            <option value="INFO">INFO</option>
-          </select>
+        {/* Filter Tabs */}
+        <div className="flex items-center space-x-1 bg-cosmic-900 border border-cosmic-border p-1 rounded-xl text-xs font-mono self-end sm:self-auto overflow-x-auto max-w-full">
+          {[
+            { id: 'ALL', label: 'All Events' },
+            { id: 'FILE_UPLOAD', label: 'Uploads' },
+            { id: 'SCAN_COMPLETED', label: 'Scans' },
+            { id: 'SHARE_CREATED', label: 'Shares' },
+            { id: 'OTP_VERIFIED', label: 'Auth' }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setTypeFilter(tab.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                typeFilter === tab.id
+                  ? 'bg-violet-600 text-white shadow-violet-glow'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Events Timeline List */}
-      <div className="glass-panel rounded-3xl p-6 border border-cosmic-border shadow-xl space-y-4">
-        <h2 className="text-base font-bold text-white tracking-tight">Activity Stream ({filteredEvents.length} Events)</h2>
-
-        {loading ? (
-          <div className="py-16 text-center text-xs text-slate-500">Loading audit trail...</div>
-        ) : filteredEvents.length === 0 ? (
-          <div className="py-16 text-center text-xs text-slate-500">
-            No events found matching your search and filter criteria.
+      {/* Timeline Stream */}
+      <div className="cyber-panel rounded-2xl p-6">
+        {filteredEvents.length === 0 ? (
+          <div className="py-12 text-center text-xs text-slate-400 font-mono space-y-2">
+            <ShieldAlert className="w-8 h-8 mx-auto text-slate-600" />
+            <p>No audit events match your current filter parameters.</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {filteredEvents.map((ev) => (
-              <div
-                key={ev.id}
-                className="p-4 bg-cosmic-950/60 rounded-2xl border border-cosmic-border hover:border-indigo-500/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-              >
-                <div className="flex items-start space-x-3.5">
-                  <div className="p-2.5 rounded-xl bg-cosmic-900 border border-cosmic-border shrink-0 mt-0.5">
-                    {getEventIcon(ev.event_type)}
+          <div className="relative pl-6 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-[1px] before:bg-cosmic-border">
+            {filteredEvents.map((evt) => {
+              const Icon = getEventIcon(evt.event_type);
+              const meta = evt.safe_metadata || {};
+
+              return (
+                <div key={evt.id} className="relative group">
+                  {/* Timeline Dot */}
+                  <div className="absolute -left-6 top-1 w-4 h-4 rounded-full bg-cosmic-950 border-2 border-violet-500/60 flex items-center justify-center group-hover:border-cyan-400 transition-colors">
+                    <span className="w-1 h-1 rounded-full bg-cyan-400" />
                   </div>
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-bold text-slate-200 tracking-tight font-mono">{ev.event_type}</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
-                        ev.event_status === 'SUCCESS' ? 'bg-emerald-500/15 text-emerald-400' :
-                        ev.event_status === 'FAILURE' ? 'bg-rose-500/15 text-rose-400' :
-                        ev.event_status === 'WARNING' ? 'bg-amber-500/15 text-amber-400' :
-                        'bg-slate-800 text-slate-300'
-                      }`}>
-                        {ev.event_status}
+
+                  {/* Event Card */}
+                  <div className="cyber-panel cyber-card-interactive rounded-xl p-4 space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+                      <div className="flex items-center space-x-2">
+                        {Icon}
+                        <span className="font-bold font-mono text-white tracking-tight">
+                          {evt.event_type}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold ${
+                          evt.event_status === 'SUCCESS' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' :
+                          evt.event_status === 'DENIED' || evt.event_status === 'REJECTED' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30' :
+                          'bg-slate-800 text-slate-400 border border-slate-700'
+                        }`}>
+                          {evt.event_status}
+                        </span>
+                      </div>
+
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {new Date(evt.created_at).toLocaleString()}
                       </span>
                     </div>
 
-                    {/* Metadata summary (NO plaintext secrets) */}
-                    <p className="text-slate-400 text-[11px] mt-1 font-mono">
-                      {ev.safe_metadata && Object.keys(ev.safe_metadata).length > 0
-                        ? Object.entries(ev.safe_metadata).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(' • ')
-                        : 'Standard verified operation'}
-                    </p>
+                    {/* Metadata Chips */}
+                    {Object.keys(meta).length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1 font-mono text-[10px]">
+                        {Object.entries(meta).map(([key, val]) => (
+                          <span
+                            key={key}
+                            className="px-2 py-0.5 rounded bg-cosmic-950/80 border border-cosmic-border text-slate-300"
+                          >
+                            <span className="text-slate-400">{key}:</span> {String(val)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                <div className="text-[11px] text-slate-500 font-mono shrink-0 pl-11 sm:pl-0">
-                  {new Date(ev.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'medium' })}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

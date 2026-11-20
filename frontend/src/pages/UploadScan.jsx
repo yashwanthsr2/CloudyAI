@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { 
   UploadCloud, 
   FileImage, 
@@ -10,7 +10,15 @@ import {
   Loader2, 
   ShieldCheck, 
   X,
-  FileCheck2
+  FileCheck2,
+  HardDrive,
+  Lock,
+  Layers,
+  Sparkles,
+  Eye,
+  Share2,
+  Info,
+  ShieldAlert
 } from 'lucide-react';
 import { api } from '../services/api';
 import RiskBadge from '../components/RiskBadge';
@@ -20,40 +28,42 @@ export default function UploadScan({ onUploadComplete, quota }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [scanStep, setScanStep] = useState(''); // 'uploading' | 'scanning' | 'masking' | 'completed'
+  const [scanStep, setScanStep] = useState(''); // 'uploading' | 'preprocessing' | 'ocr' | 'redacting' | 'completed'
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
   const [scanResult, setScanResult] = useState(null);
 
   const navigate = useNavigate();
 
+  const usedBytes = quota?.used_bytes || 0;
+  const remainingMb = Math.max(0, ((100 * 1024 * 1024 - usedBytes) / (1024 * 1024))).toFixed(1);
+
   const validateAndSelectFile = (file) => {
     setError(null);
     setScanResult(null);
 
-    // 1. Enforce JPG, JPEG, PNG only
+    // 1. Strict validation: JPG, JPEG, PNG only
     const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
     const validExtensions = /\.(jpe?g|png)$/i;
 
     if (!validTypes.includes(file.type.toLowerCase()) && !validExtensions.test(file.name)) {
-      setError('Invalid file format: Only JPG, JPEG, and PNG images are supported. PDF documents are not accepted.');
+      setError('Unsupported File Format: Only JPG, JPEG, and PNG images are accepted. PDF documents are strictly rejected to eliminate hidden vector text risks.');
       setSelectedFile(null);
       setPreviewUrl(null);
       return;
     }
 
-    // 2. Enforce 5 MB individual limit
+    // 2. Strict 5 MB limit
     if (file.size > 5 * 1024 * 1024) {
-      setError(`File size (${(file.size / (1024 * 1024)).toFixed(2)} MB) exceeds the 5 MB maximum limit.`);
+      setError(`File size (${(file.size / (1024 * 1024)).toFixed(2)} MB) exceeds the 5.0 MB maximum allowed limit.`);
       setSelectedFile(null);
       setPreviewUrl(null);
       return;
     }
 
-    // 3. Enforce 100 MB total quota
-    const used = quota?.used_bytes || 0;
-    if (used + file.size > 100 * 1024 * 1024) {
-      setError(`Cannot upload: Adding this file would exceed your 100 MB vault storage quota.`);
+    // 3. Strict 100 MB user quota
+    if (usedBytes + file.size > 100 * 1024 * 1024) {
+      setError(`Storage Limit Exceeded: Uploading this file would exceed your 100 MB vault quota.`);
       setSelectedFile(null);
       setPreviewUrl(null);
       return;
@@ -61,7 +71,7 @@ export default function UploadScan({ onUploadComplete, quota }) {
 
     setSelectedFile(file);
 
-    // Create image preview
+    // Generate local preview
     const reader = new FileReader();
     reader.onload = () => setPreviewUrl(reader.result);
     reader.readAsDataURL(file);
@@ -92,246 +102,482 @@ export default function UploadScan({ onUploadComplete, quota }) {
     try {
       setUploading(true);
       setError(null);
-      setProgress(20);
-
-      // Step 1: Upload to private storage
+      setProgress(15);
       setScanStep('uploading');
+
+      // Upload file to encrypted vault
       const formData = new FormData();
       formData.append('file', selectedFile);
       const uploadRes = await api.uploadFile(formData);
       const uploadedFile = uploadRes.file;
 
-      setProgress(60);
+      setProgress(45);
+      setScanStep('ocr');
 
-      // Step 2: Trigger OCR Privacy Scan & Masking
-      setScanStep('scanning');
+      // Execute OCR and automatic redaction
       const scanRes = await api.scanFile(uploadedFile.id);
 
-      setProgress(100);
-      setScanStep('completed');
-      setScanResult({
-        file: scanRes.file,
-        scan: scanRes.scan
-      });
+      setProgress(85);
+      setScanStep('redacting');
 
-      if (onUploadComplete) onUploadComplete();
+      setTimeout(() => {
+        setProgress(100);
+        setScanStep('completed');
+        setScanResult({
+          file: scanRes.file,
+          scan: scanRes.scan
+        });
+        if (onUploadComplete) onUploadComplete();
+      }, 400);
+
     } catch (err) {
       console.error(err);
-      setError(err.message || 'Scan process encountered an error');
+      setError(err.message || 'Scanning pipeline failed. Please ensure the image is clear and valid.');
     } finally {
       setUploading(false);
     }
   };
 
+  const resetSelection = () => {
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setScanResult(null);
+    setError(null);
+    setProgress(0);
+    setScanStep('');
+  };
+
+  const d = scanResult?.file?.detected_info || {};
+  const aadhaarCount = d.aadhaar_count || d.count_aadhaar || 0;
+  const panCount = d.pan_count || d.count_pan || 0;
+  const phoneCount = d.phone_count || d.count_phone || 0;
+  const emailCount = d.email_count || d.count_email || 0;
+  const totalPii = aadhaarCount + panCount + phoneCount + emailCount;
+
   return (
-    <div className="p-8 max-w-4xl mx-auto space-y-6">
+    <div className="p-8 max-w-7xl mx-auto space-y-6">
       
-      {/* Title */}
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight flex items-center space-x-2.5">
-          <UploadCloud className="w-6 h-6 text-indigo-400" />
-          <span>Upload & Privacy Scan</span>
-        </h1>
-        <p className="text-xs text-slate-400 mt-1">
-          Strictly accepts JPG, JPEG, and PNG images up to 5 MB. Documents are stored in an encrypted vault and analyzed via OCR for Aadhaar, PAN, phone, and email detection.
-        </p>
+      {/* Workspace Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-cosmic-border/60">
+        <div>
+          <div className="flex items-center space-x-2">
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-violet-500/20 text-cyan-300 border border-violet-500/30">
+              PIPELINE INGESTION
+            </span>
+            <span className="text-slate-400 text-xs">• Air-Gapped Scanning</span>
+          </div>
+          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center space-x-2.5 mt-1">
+            <UploadCloud className="w-6 h-6 text-violet-400" />
+            <span>Document Upload & Privacy Engine</span>
+          </h1>
+          <p className="text-xs text-slate-400 mt-1 max-w-2xl">
+            Ingest identity documents (Aadhaar, PAN, utility records) into your encrypted vault. Our automated Tesseract.js OCR and Sharp engine extracts coordinates, applies strict risk classification, and permanently bakes opaque masks over detected PII.
+          </p>
+        </div>
+
+        {/* Compact Quota & Format Ribbon */}
+        <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
+          <div className="px-3 py-1.5 rounded-xl bg-cosmic-900 border border-cosmic-border flex items-center space-x-1.5 text-slate-300">
+            <span className="w-2 h-2 rounded-full bg-cyan-400" />
+            <span>JPG / PNG only</span>
+          </div>
+          <div className="px-3 py-1.5 rounded-xl bg-cosmic-900 border border-cosmic-border flex items-center space-x-1.5 text-slate-300">
+            <span className="w-2 h-2 rounded-full bg-violet-400" />
+            <span>Max: 5.0 MB</span>
+          </div>
+          <div className="px-3 py-1.5 rounded-xl bg-cosmic-900 border border-cosmic-border flex items-center space-x-1.5 text-emerald-400">
+            <HardDrive className="w-3.5 h-3.5 text-emerald-400" />
+            <span>{remainingMb} MB Free</span>
+          </div>
+        </div>
       </div>
 
+      {/* Error Alert Notice */}
       {error && (
-        <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-2xl flex items-start space-x-3">
-          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-rose-400" />
-          <div>
-            <p className="font-semibold">Upload Validation Notice</p>
-            <p className="mt-0.5 text-slate-300">{error}</p>
+        <div className="p-4 bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs rounded-2xl flex items-start space-x-3 shadow-lg">
+          <AlertTriangle className="w-5 h-5 shrink-0 text-rose-400 mt-0.5" />
+          <div className="flex-1">
+            <p className="font-semibold text-rose-200">Security Ingestion Notice</p>
+            <p className="mt-0.5 text-slate-300 leading-relaxed">{error}</p>
           </div>
+          <button onClick={() => setError(null)} className="text-slate-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
-      {/* Main Upload / Drag-and-Drop Area (Reference 3) */}
-      {!scanResult ? (
-        <div className="glass-panel rounded-3xl p-8 border border-cosmic-border shadow-2xl space-y-6">
+      {/* Balanced 2-Column Split Workspace */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        {/* LEFT COLUMN: Ingestion Dropzone & Selection (5 or 6 cols) */}
+        <div className="lg:col-span-6 space-y-4">
           
-          <div
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all cursor-pointer relative group ${
-              dragActive 
-                ? 'border-indigo-400 bg-indigo-500/10 scale-[1.01]' 
-                : 'border-cosmic-border hover:border-indigo-500/50 bg-cosmic-950/40'
-            }`}
-          >
-            <input
-              type="file"
-              accept=".jpg,.jpeg,.png,image/jpeg,image/png"
-              onChange={(e) => e.target.files?.[0] && validateAndSelectFile(e.target.files[0])}
-              disabled={uploading}
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-            />
+          {!selectedFile ? (
+            /* Empty State Dropzone */
+            <div
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+              className={`cyber-panel rounded-2xl p-8 text-center transition-all duration-300 cursor-pointer relative group overflow-hidden border-2 border-dashed ${
+                dragActive 
+                  ? 'border-cyan-400 bg-violet-950/30 scale-[1.01] shadow-cyan-glow' 
+                  : 'border-cosmic-border hover:border-violet-500/50 hover:bg-cosmic-850/60'
+              }`}
+            >
+              {/* Animated Radar Scanning Line */}
+              <div className="absolute inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-cyber-radar pointer-events-none" />
 
-            <div className="flex flex-col items-center">
-              <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 group-hover:scale-110 flex items-center justify-center text-indigo-400 mb-4 transition-transform shadow-lg shadow-indigo-500/10">
-                <UploadCloud className="w-8 h-8" />
-              </div>
-              <p className="text-sm font-semibold text-slate-200">
-                {selectedFile ? selectedFile.name : 'Click to browse or drag and drop image here'}
-              </p>
-              <p className="text-xs text-slate-500 mt-1.5 font-mono">
-                JPG &bull; JPEG &bull; PNG &bull; Max 5 MB per document
-              </p>
-            </div>
-          </div>
+              <input
+                type="file"
+                id="file-upload-input"
+                accept="image/jpeg,image/png,image/jpg"
+                onChange={(e) => e.target.files && e.target.files[0] && validateAndSelectFile(e.target.files[0])}
+                className="hidden"
+              />
 
-          {/* Selected File Details & Preview */}
-          {selectedFile && (
-            <div className="p-4 bg-cosmic-950/80 rounded-2xl border border-cosmic-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center space-x-3.5 truncate">
-                {previewUrl ? (
-                  <img src={previewUrl} alt="Preview" className="w-12 h-12 rounded-xl object-cover border border-cosmic-border shrink-0" />
-                ) : (
-                  <div className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 shrink-0">
-                    <FileImage className="w-6 h-6" />
-                  </div>
-                )}
-                <div className="truncate">
-                  <p className="text-xs font-semibold text-slate-200 truncate">{selectedFile.name}</p>
-                  <p className="text-[11px] text-slate-400 font-mono">
-                    {(selectedFile.size / 1024).toFixed(1)} KB &bull; {selectedFile.type || 'image'}
+              <label htmlFor="file-upload-input" className="cursor-pointer block space-y-4">
+                <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-violet-600/30 to-cyan-500/30 border border-violet-500/40 flex items-center justify-center group-hover:scale-105 transition-transform duration-200 shadow-violet-glow">
+                  <UploadCloud className="w-8 h-8 text-cyan-300 group-hover:text-white transition-colors" />
+                </div>
+
+                <div>
+                  <h3 className="text-base font-bold text-white tracking-tight">
+                    Drag & Drop Document Image
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                    Select a high-resolution identity photo or document scan. Images are streamed to secure memory and parsed locally.
                   </p>
+                </div>
+
+                <div className="pt-2">
+                  <span className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-violet-glow transition-all active:scale-[0.98]">
+                    <FileImage className="w-4 h-4 text-cyan-300" />
+                    <span>Browse Local Files</span>
+                  </span>
+                </div>
+
+                <div className="pt-4 border-t border-cosmic-border/60 flex items-center justify-center space-x-4 text-[10px] text-slate-400 font-mono">
+                  <span className="flex items-center space-x-1">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                    <span>JPG, JPEG, PNG</span>
+                  </span>
+                  <span>•</span>
+                  <span>Up to 5 MB</span>
+                  <span>•</span>
+                  <span>Zero-Plaintext</span>
+                </div>
+              </label>
+            </div>
+          ) : (
+            /* Selected File Preview & Ingestion Card */
+            <div className="cyber-panel-elevated rounded-2xl p-6 space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-cosmic-border/60">
+                <span className="text-xs font-mono font-bold text-cyan-300 flex items-center space-x-1.5">
+                  <FileCheck2 className="w-4 h-4 text-violet-400" />
+                  <span>DOCUMENT STAGED FOR INGESTION</span>
+                </span>
+                {!uploading && (
+                  <button
+                    onClick={resetSelection}
+                    className="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 transition-colors"
+                    title="Deselect file"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {/* Thumbnail and Meta */}
+              <div className="flex items-start space-x-4">
+                <div className="w-24 h-24 rounded-xl bg-cosmic-950 border border-cosmic-border overflow-hidden shrink-0 flex items-center justify-center p-1 relative">
+                  {previewUrl ? (
+                    <img src={previewUrl} alt="Preview" className="w-full h-full object-cover rounded-lg" />
+                  ) : (
+                    <FileImage className="w-8 h-8 text-slate-600" />
+                  )}
+                  <span className="absolute bottom-1 right-1 px-1 py-0.5 rounded text-[8px] font-mono bg-cosmic-950/90 text-cyan-300 border border-cosmic-border">
+                    {selectedFile.type.split('/')[1]?.toUpperCase()}
+                  </span>
+                </div>
+
+                <div className="min-w-0 flex-1 space-y-1">
+                  <p className="text-sm font-bold text-white truncate" title={selectedFile.name}>
+                    {selectedFile.name}
+                  </p>
+                  <p className="text-xs text-slate-400 font-mono">
+                    {(selectedFile.size / 1024).toFixed(1)} KB • {selectedFile.type || 'image/jpeg'}
+                  </p>
+                  <div className="pt-2 flex items-center space-x-2 text-[10px] text-emerald-400 font-mono">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Memory buffered • Isolated sandbox</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-3 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => { setSelectedFile(null); setPreviewUrl(null); }}
-                  disabled={uploading}
-                  className="p-2 text-slate-400 hover:text-white rounded-lg"
-                  title="Remove"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleUploadAndScan}
-                  disabled={uploading}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-semibold text-xs shadow-lg shadow-indigo-500/25 flex items-center space-x-2 transition-all disabled:opacity-50"
-                >
-                  {uploading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
+              {/* Progress Bar during Scanning */}
+              {uploading && (
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="text-slate-300 flex items-center space-x-1.5">
+                      <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
                       <span>
-                        {scanStep === 'uploading' && 'Encrypting & Storing...'}
-                        {scanStep === 'scanning' && 'Running OCR & PII Detection...'}
-                        {scanStep === 'completed' && 'Finalizing...'}
+                        {scanStep === 'uploading' && 'Streaming file to private storage...'}
+                        {scanStep === 'ocr' && 'Extracting text coordinates (Tesseract.js)...'}
+                        {scanStep === 'redacting' && 'Baking opaque pixel masks (Sharp)...'}
+                        {scanStep === 'completed' && 'DLP Scan complete!'}
                       </span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Upload & Privacy Scan</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </>
-                  )}
+                    </span>
+                    <span className="text-cyan-300 font-bold">{progress}%</span>
+                  </div>
+
+                  <div className="w-full h-2 bg-cosmic-950 rounded-full overflow-hidden border border-cosmic-border/60">
+                    <div
+                      className="h-full bg-gradient-to-r from-violet-600 via-indigo-500 to-cyan-400 transition-all duration-300 rounded-full"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Execution CTA Buttons */}
+              {!uploading && !scanResult && (
+                <div className="pt-2 flex items-center space-x-3">
+                  <button
+                    onClick={handleUploadAndScan}
+                    className="flex-1 inline-flex items-center justify-center space-x-2 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs shadow-violet-glow transition-all active:scale-[0.98]"
+                  >
+                    <ScanEye className="w-4 h-4 text-cyan-300" />
+                    <span>Execute Privacy Scan & Redaction</span>
+                  </button>
+
+                  <button
+                    onClick={resetSelection}
+                    className="px-4 py-3 rounded-xl bg-cosmic-800 hover:bg-cosmic-750 text-slate-300 font-semibold text-xs border border-cosmic-border transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              {scanResult && (
+                <button
+                  onClick={resetSelection}
+                  className="w-full py-2.5 rounded-xl bg-cosmic-800 hover:bg-cosmic-750 text-slate-300 font-medium text-xs border border-cosmic-border transition-colors"
+                >
+                  Upload Another Document
                 </button>
-              </div>
+              )}
             </div>
           )}
 
-          {/* Progress bar during scan */}
-          {uploading && (
-            <div className="space-y-2 pt-2">
-              <div className="flex justify-between text-xs text-slate-400 font-mono">
-                <span>{scanStep === 'uploading' ? 'Vault Upload' : 'Tesseract OCR & Masking'}</span>
-                <span>{progress}%</span>
-              </div>
-              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-300"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
+          {/* Compliance & Privacy Guarantees */}
+          <div className="p-4 rounded-xl bg-cosmic-900/60 border border-cosmic-border text-xs text-slate-400 space-y-2">
+            <div className="flex items-center space-x-1.5 text-slate-300 font-semibold text-[11px]">
+              <Lock className="w-3.5 h-3.5 text-violet-400" />
+              <span>Zero-Plaintext Guarantee</span>
             </div>
-          )}
+            <p className="text-[11px] leading-relaxed">
+              Extracted sensitive credentials (Aadhaar, PAN, phone, email) exist only in volatile server memory during OCR processing. No plaintext values are ever saved to database tables or application logs.
+            </p>
+          </div>
 
         </div>
-      ) : (
-        /* Scan Completed Summary Card */
-        <div className="glass-panel rounded-3xl p-8 border border-cosmic-border shadow-2xl space-y-6">
-          <div className="flex items-center justify-between pb-5 border-b border-cosmic-border">
-            <div className="flex items-center space-x-3">
-              <div className="p-2.5 bg-emerald-500/15 rounded-xl border border-emerald-500/30 text-emerald-400">
-                <CheckCircle2 className="w-6 h-6" />
+
+        {/* RIGHT COLUMN: Results OR Engine Specifications (6 or 7 cols) */}
+        <div className="lg:col-span-6 space-y-4">
+          
+          {scanResult ? (
+            /* Structured Scan Results Card (Reference 4) */
+            <div className="cyber-panel-elevated rounded-2xl p-6 space-y-6 shadow-2xl border-violet-500/30">
+              
+              {/* Header with Risk Badge */}
+              <div className="flex items-center justify-between pb-4 border-b border-cosmic-border/60">
+                <div>
+                  <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">
+                    DLP Security Assessment
+                  </span>
+                  <h3 className="text-base font-bold text-white mt-0.5">
+                    {scanResult.file.filename}
+                  </h3>
+                </div>
+                <RiskBadge level={scanResult.file.risk_level} size="lg" />
               </div>
+
+              {/* Detected Entity Counters */}
               <div>
-                <h2 className="text-base font-bold text-white tracking-tight">Privacy Scan Complete</h2>
-                <p className="text-xs text-slate-400">{scanResult.file.filename}</p>
+                <p className="text-xs font-mono font-semibold text-slate-400 mb-2.5 flex items-center justify-between">
+                  <span>DETECTED SENSITIVE ENTITIES</span>
+                  <span className="text-cyan-300 font-bold">{totalPii} Found</span>
+                </p>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="p-3 bg-cosmic-950/80 rounded-xl border border-cosmic-border text-center">
+                    <p className="text-[10px] font-mono text-slate-400">Aadhaar</p>
+                    <p className={`text-base font-bold font-mono mt-1 ${aadhaarCount > 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+                      {aadhaarCount}
+                    </p>
+                    <span className="text-[9px] text-slate-400">40 pts • High</span>
+                  </div>
+
+                  <div className="p-3 bg-cosmic-950/80 rounded-xl border border-cosmic-border text-center">
+                    <p className="text-[10px] font-mono text-slate-400">PAN Card</p>
+                    <p className={`text-base font-bold font-mono mt-1 ${panCount > 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+                      {panCount}
+                    </p>
+                    <span className="text-[9px] text-slate-400">30 pts • High</span>
+                  </div>
+
+                  <div className="p-3 bg-cosmic-950/80 rounded-xl border border-cosmic-border text-center">
+                    <p className="text-[10px] font-mono text-slate-400">Phone</p>
+                    <p className={`text-base font-bold font-mono mt-1 ${phoneCount > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
+                      {phoneCount}
+                    </p>
+                    <span className="text-[9px] text-slate-400">10 pts • Med</span>
+                  </div>
+
+                  <div className="p-3 bg-cosmic-950/80 rounded-xl border border-cosmic-border text-center">
+                    <p className="text-[10px] font-mono text-slate-400">Email</p>
+                    <p className={`text-base font-bold font-mono mt-1 ${emailCount > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                      {emailCount}
+                    </p>
+                    <span className="text-[9px] text-slate-400">10 pts • Low</span>
+                  </div>
+                </div>
               </div>
-            </div>
-            <RiskBadge level={scanResult.scan.risk_level} size="lg" />
-          </div>
 
-          {/* Reason Box */}
-          <div className="p-4 bg-cosmic-950/80 rounded-2xl border border-cosmic-border text-xs text-slate-300">
-            <span className="font-semibold text-indigo-400">Classification Assessment: </span>
-            {scanResult.scan.risk_reason}
-          </div>
+              {/* Side-by-Side Dual Previews (Original vs Masked) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-mono text-slate-300 font-semibold flex items-center space-x-1.5">
+                    <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Redaction Visual Inspection</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-mono flex items-center space-x-1">
+                    <ShieldCheck className="w-3 h-3" />
+                    <span>Permanent Pixel Burn</span>
+                  </span>
+                </div>
 
-          {/* Categories Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-4 bg-cosmic-950/60 rounded-xl border border-cosmic-border">
-              <span className="text-[11px] text-slate-400 block">Aadhaar Numbers</span>
-              <span className="text-xl font-bold text-rose-400 font-mono">{scanResult.scan.counts?.aadhaar || 0}</span>
-              <span className="text-[10px] text-slate-500 block mt-0.5">Priority: HIGH (5m)</span>
-            </div>
-            <div className="p-4 bg-cosmic-950/60 rounded-xl border border-cosmic-border">
-              <span className="text-[11px] text-slate-400 block">PAN Cards</span>
-              <span className="text-xl font-bold text-amber-400 font-mono">{scanResult.scan.counts?.pan || 0}</span>
-              <span className="text-[10px] text-slate-500 block mt-0.5">Priority: HIGH (5m)</span>
-            </div>
-            <div className="p-4 bg-cosmic-950/60 rounded-xl border border-cosmic-border">
-              <span className="text-[11px] text-slate-400 block">Phone Numbers</span>
-              <span className="text-xl font-bold text-blue-400 font-mono">{scanResult.scan.counts?.phone || 0}</span>
-              <span className="text-[10px] text-slate-500 block mt-0.5">Priority: MEDIUM (10m)</span>
-            </div>
-            <div className="p-4 bg-cosmic-950/60 rounded-xl border border-cosmic-border">
-              <span className="text-[11px] text-slate-400 block">Email Addresses</span>
-              <span className="text-xl font-bold text-purple-400 font-mono">{scanResult.scan.counts?.email || 0}</span>
-              <span className="text-[10px] text-slate-500 block mt-0.5">Priority: LOW (15m)</span>
-            </div>
-          </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Original (Authenticated Owner Only) */}
+                  <div className="p-2.5 bg-cosmic-950/80 rounded-xl border border-cosmic-border space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                      <span>Vault Original</span>
+                      <span className="text-amber-400 font-semibold">Owner Only</span>
+                    </div>
+                    <div className="h-32 bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center border border-slate-800">
+                      <img 
+                        src={api.getOriginalPreviewUrl(scanResult.file.id)} 
+                        alt="Original" 
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  </div>
 
-          {/* Action Row */}
-          <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <button
-              onClick={() => { setSelectedFile(null); setScanResult(null); }}
-              className="text-xs text-slate-400 hover:text-white font-medium"
-            >
-              &larr; Upload another image
-            </button>
+                  {/* Redacted (Public Safe Copy) */}
+                  <div className="p-2.5 bg-cosmic-950/80 rounded-xl border border-violet-500/30 space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                      <span>Protected Masked Copy</span>
+                      <span className="text-emerald-400 font-semibold">Share Safe</span>
+                    </div>
+                    <div className="h-32 bg-slate-900 rounded-lg overflow-hidden flex items-center justify-center border border-slate-800">
+                      <img 
+                        src={api.getMaskedPreviewUrl(scanResult.file.id)} 
+                        alt="Masked" 
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
 
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => navigate(`/privacy-analysis?file=${scanResult.file.id}`)}
-                className="px-4 py-2.5 rounded-xl bg-cosmic-800 hover:bg-cosmic-700 text-slate-200 text-xs font-semibold border border-cosmic-border flex items-center space-x-1.5 transition-all"
-              >
-                <ScanEye className="w-4 h-4 text-indigo-400" />
-                <span>Open Privacy Analysis</span>
-              </button>
+              {/* Action Buttons */}
+              <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
+                <Link
+                  to={`/shares?file=${scanResult.file.id}`}
+                  className="w-full sm:flex-1 inline-flex items-center justify-center space-x-2 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold text-xs shadow-cyan-glow transition-all duration-200"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span>Create 1-to-1 Secure Share</span>
+                </Link>
 
-              <button
-                onClick={() => navigate(`/shares?file=${scanResult.file.id}`)}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-semibold text-xs shadow-lg shadow-indigo-500/25 flex items-center space-x-1.5 transition-all"
-              >
-                <span>Share Securely</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
+                <Link
+                  to={`/privacy-analysis?file=${scanResult.file.id}`}
+                  className="w-full sm:w-auto px-4 py-3 rounded-xl bg-cosmic-800 hover:bg-cosmic-750 text-slate-200 font-semibold text-xs border border-cosmic-border inline-flex items-center justify-center space-x-1.5 transition-colors"
+                >
+                  <Eye className="w-3.5 h-3.5 text-violet-400" />
+                  <span>Full DLP Review</span>
+                </Link>
+              </div>
+
             </div>
-          </div>
+          ) : (
+            /* Idle State: Privacy Engine Architecture Specifications */
+            <div className="cyber-panel rounded-2xl p-6 space-y-5">
+              <div className="flex items-center space-x-2 pb-3 border-b border-cosmic-border/60">
+                <ShieldAlert className="w-4 h-4 text-violet-400" />
+                <h3 className="text-sm font-bold text-white tracking-tight">
+                  Automated Security Engine Protocol
+                </h3>
+              </div>
+
+              {/* Detection Specs */}
+              <div className="space-y-3">
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  PRIVACLOUD AI applies automated OCR pattern discovery and deterministic regular expression scanning to neutralize document credential leakage:
+                </p>
+
+                <div className="space-y-2">
+                  <div className="p-3 bg-cosmic-950/60 rounded-xl border border-cosmic-border flex items-start space-x-3">
+                    <span className="w-2 h-2 rounded-full bg-rose-400 mt-1.5 shrink-0" />
+                    <div className="text-xs">
+                      <p className="font-semibold text-slate-200">Aadhaar & PAN Identification</p>
+                      <p className="text-slate-400 text-[11px] mt-0.5">
+                        Detects 12-digit triple sequence (`w1 w2 w3`) and 10-character alphanumeric PAN (`[A-Z]{5}\d{4}[A-Z]`). Immediately sets <strong>HIGH RISK</strong> with a strict <strong>5-minute TTL</strong>.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-cosmic-950/60 rounded-xl border border-cosmic-border flex items-start space-x-3">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                    <div className="text-xs">
+                      <p className="font-semibold text-slate-200">Phone & Contact Info</p>
+                      <p className="text-slate-400 text-[11px] mt-0.5">
+                        Matches 10-digit Indian mobile patterns. Assigns <strong>MEDIUM RISK</strong> with a <strong>10-minute TTL</strong>.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-cosmic-950/60 rounded-xl border border-cosmic-border flex items-start space-x-3">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+                    <div className="text-xs">
+                      <p className="font-semibold text-slate-200">Email Address Neutralization</p>
+                      <p className="text-slate-400 text-[11px] mt-0.5">
+                        Matches RFC-compliant email strings. Assigns <strong>LOW RISK</strong> with a <strong>15-minute TTL</strong>.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Redaction Guarantee */}
+              <div className="p-3.5 bg-gradient-to-r from-violet-950/40 to-cyan-950/40 rounded-xl border border-violet-500/20 text-xs space-y-1">
+                <span className="font-semibold text-cyan-300 flex items-center space-x-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
+                  <span>Pixel-Level Permanent Redaction</span>
+                </span>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Sharp composites solid black SVG rectangles ($#000000$) with $+4\text{px}$ boundary padding. Pixel bytes are permanently overwritten with $[0, 0, 0, 255]$ — no CSS blur or reversible overlays.
+                </p>
+              </div>
+
+            </div>
+          )}
 
         </div>
-      )}
+
+      </div>
 
     </div>
   );

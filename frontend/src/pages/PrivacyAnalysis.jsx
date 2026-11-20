@@ -10,7 +10,11 @@ import {
   AlertTriangle, 
   CheckCircle, 
   Lock,
-  RefreshCw
+  RefreshCw,
+  Sparkles,
+  FileText,
+  Info,
+  Maximize2
 } from 'lucide-react';
 import { api } from '../services/api';
 import RiskBadge from '../components/RiskBadge';
@@ -54,29 +58,53 @@ export default function PrivacyAnalysis({ files = [] }) {
   const maskedUrl = file?.storage_path_masked ? api.getMaskedPreviewUrl(file.id) : '';
   const d = file?.detected_info || {};
 
+  const aadhaarCount = d.aadhaar_count || d.count_aadhaar || 0;
+  const panCount = d.pan_count || d.count_pan || 0;
+  const phoneCount = d.phone_count || d.count_phone || 0;
+  const emailCount = d.email_count || d.count_email || 0;
+
+  const getRiskExplanation = (level) => {
+    switch (level) {
+      case 'HIGH':
+        return 'Critical Indian Identity Credentials (Aadhaar number or PAN identifier) discovered in document text coordinates. Exposing these identifiers presents acute identity theft risk. Server strictly enforces a 5-minute link expiration.';
+      case 'MEDIUM':
+        return 'Personal contact numbers detected without primary identity documents. Assigned 10-minute link expiration.';
+      case 'LOW':
+        return 'Email address detected. Low-impact contact information assigned 15-minute link expiration.';
+      default:
+        return 'No sensitive Indian PII discovered by OCR and regular expression scanning engines. Clean document.';
+    }
+  };
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-cosmic-border/60">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center space-x-2.5">
-            <ScanEye className="w-6 h-6 text-indigo-400" />
+          <div className="flex items-center space-x-2">
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-violet-500/20 text-cyan-300 border border-violet-500/30">
+              DLP REDACTION STUDIO
+            </span>
+            <span className="text-slate-400 text-xs">• Pixel-Level Verification</span>
+          </div>
+          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center space-x-2.5 mt-1">
+            <ScanEye className="w-6 h-6 text-violet-400" />
             <span>Privacy Analysis & DLP Redaction</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Data Loss Prevention (DLP) review: compare original authenticated vault file with the server-masked protected version.
+            Verify irreversible redaction. Compare original authenticated vault files against server-rendered masked copies before generating ephemeral shares.
           </p>
         </div>
 
-        {/* File Selector Dropdown */}
+        {/* Document Selector Dropdown */}
         {files.length > 0 && (
-          <div className="flex items-center space-x-3">
-            <span className="text-xs text-slate-400">Select Document:</span>
+          <div className="flex items-center space-x-3 self-start md:self-auto">
+            <span className="text-xs text-slate-400 font-mono">Document:</span>
             <select
               value={selectedFileId}
               onChange={(e) => setSelectedFileId(e.target.value)}
-              className="px-3.5 py-2 bg-cosmic-900 border border-cosmic-border rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500 font-mono"
+              className="px-3.5 py-2 bg-cosmic-900 border border-cosmic-border rounded-xl text-xs text-slate-200 focus:outline-none focus:border-violet-500 font-mono"
             >
               {files.map((f) => (
                 <option key={f.id} value={f.id}>
@@ -89,160 +117,147 @@ export default function PrivacyAnalysis({ files = [] }) {
       </div>
 
       {!file ? (
-        <div className="py-20 text-center glass-panel rounded-3xl border border-cosmic-border">
-          <ScanEye className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-          <p className="text-sm text-slate-400">No document selected for privacy review.</p>
-          <Link to="/upload" className="mt-3 inline-block text-xs font-semibold text-indigo-400 hover:underline">
-            Upload and scan a file first
-          </Link>
+        <div className="cyber-panel rounded-2xl p-12 text-center space-y-3">
+          <p className="text-sm font-bold text-slate-300">No Document Selected</p>
+          <p className="text-xs text-slate-400">Please choose a file from your vault to inspect privacy redactions.</p>
         </div>
       ) : (
         <div className="space-y-6">
           
-          {/* Metadata & Risk Card (Reference 4) */}
-          <div className="glass-panel rounded-3xl p-6 border border-cosmic-border shadow-xl space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-cosmic-border">
-              <div>
-                <div className="flex items-center space-x-2.5">
-                  <h2 className="text-lg font-bold text-white tracking-tight">{file.filename}</h2>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-cosmic-950 text-slate-300 border border-cosmic-border">
-                    {(file.size_bytes / 1024).toFixed(1)} KB
-                  </span>
-                </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  OCR Engine: <strong>Tesseract.js v5</strong> &bull; Confidence: <strong>{file.ocr_confidence || 95}%</strong> &bull; Masking: <strong className="text-emerald-400">{file.masking_status}</strong>
+          {/* Top Status & Rationale Card */}
+          <div className="cyber-panel-elevated rounded-2xl p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">
+                  CLASSIFICATION AUDIT
+                </span>
+                <h2 className="text-lg font-bold text-white">{file.filename}</h2>
+              </div>
+              <RiskBadge level={file.risk_level} size="lg" />
+            </div>
+
+            <div className="p-4 bg-cosmic-950/80 rounded-xl border border-cosmic-border flex items-start space-x-3 text-xs">
+              <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold text-slate-200">Policy Rationale</p>
+                <p className="text-slate-400 leading-relaxed text-[11px]">{getRiskExplanation(file.risk_level)}</p>
+              </div>
+            </div>
+
+            {/* Detected Entity Counters */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+              <div className="p-3 bg-cosmic-950/60 rounded-xl border border-cosmic-border text-center">
+                <p className="text-[10px] font-mono text-slate-400">Aadhaar (40 pts)</p>
+                <p className={`text-base font-bold font-mono mt-1 ${aadhaarCount > 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+                  {aadhaarCount}
                 </p>
               </div>
 
-              <div className="flex items-center space-x-3">
-                <RiskBadge level={file.risk_level} size="lg" />
-                <Link
-                  to={`/shares?file=${file.id}`}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-semibold text-xs shadow-lg shadow-indigo-500/20 flex items-center space-x-1.5 transition-all"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                  <span>Share Masked Copy</span>
-                </Link>
+              <div className="p-3 bg-cosmic-950/60 rounded-xl border border-cosmic-border text-center">
+                <p className="text-[10px] font-mono text-slate-400">PAN Card (30 pts)</p>
+                <p className={`text-base font-bold font-mono mt-1 ${panCount > 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+                  {panCount}
+                </p>
               </div>
-            </div>
 
-            {/* Assessment Reason */}
-            <div className="p-4 bg-cosmic-950/80 rounded-2xl border border-cosmic-border text-xs text-slate-300 flex items-start space-x-3">
-              <ShieldAlert className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-semibold text-indigo-300">Sensitivity Policy Assessment: </span>
-                {file.risk_reason || 'Document scanned for Indian PII categories.'}
+              <div className="p-3 bg-cosmic-950/60 rounded-xl border border-cosmic-border text-center">
+                <p className="text-[10px] font-mono text-slate-400">Phone (10 pts)</p>
+                <p className={`text-base font-bold font-mono mt-1 ${phoneCount > 0 ? 'text-amber-400' : 'text-slate-500'}`}>
+                  {phoneCount}
+                </p>
               </div>
-            </div>
 
-            {/* Detection Counts Summary */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              <div className="p-3.5 bg-cosmic-950/60 rounded-xl border border-cosmic-border">
-                <span className="text-slate-400 block text-[11px]">Aadhaar Numbers</span>
-                <span className="text-lg font-bold text-rose-400 font-mono">{d.aadhaar || 0}</span>
-                <span className="text-[10px] text-slate-500 block">Weight: HIGH (5m TTL)</span>
-              </div>
-              <div className="p-3.5 bg-cosmic-950/60 rounded-xl border border-cosmic-border">
-                <span className="text-slate-400 block text-[11px]">PAN Card IDs</span>
-                <span className="text-lg font-bold text-amber-400 font-mono">{d.pan || 0}</span>
-                <span className="text-[10px] text-slate-500 block">Weight: HIGH (5m TTL)</span>
-              </div>
-              <div className="p-3.5 bg-cosmic-950/60 rounded-xl border border-cosmic-border">
-                <span className="text-slate-400 block text-[11px]">Phone Numbers</span>
-                <span className="text-lg font-bold text-blue-400 font-mono">{d.phone || 0}</span>
-                <span className="text-[10px] text-slate-500 block">Weight: MEDIUM (10m TTL)</span>
-              </div>
-              <div className="p-3.5 bg-cosmic-950/60 rounded-xl border border-cosmic-border">
-                <span className="text-slate-400 block text-[11px]">Email Addresses</span>
-                <span className="text-lg font-bold text-purple-400 font-mono">{d.email || 0}</span>
-                <span className="text-[10px] text-slate-500 block">Weight: LOW (15m TTL)</span>
+              <div className="p-3 bg-cosmic-950/60 rounded-xl border border-cosmic-border text-center">
+                <p className="text-[10px] font-mono text-slate-400">Email (10 pts)</p>
+                <p className={`text-base font-bold font-mono mt-1 ${emailCount > 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                  {emailCount}
+                </p>
               </div>
             </div>
           </div>
 
-          {/* View Mode Controls */}
+          {/* View Mode Toolbar */}
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-300">Document Comparison Viewer:</span>
-            <div className="flex bg-cosmic-900 border border-cosmic-border p-1 rounded-xl text-xs space-x-1">
+            <div className="flex items-center space-x-1 bg-cosmic-900 border border-cosmic-border p-1 rounded-xl text-xs font-mono">
               <button
                 onClick={() => setViewMode('side-by-side')}
-                className={`px-3 py-1 rounded-lg font-medium transition-all ${
-                  viewMode === 'side-by-side' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  viewMode === 'side-by-side' ? 'bg-violet-600 text-white shadow-violet-glow font-bold' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                Side-by-Side
+                Side-by-Side Dual View
               </button>
               <button
                 onClick={() => setViewMode('original')}
-                className={`px-3 py-1 rounded-lg font-medium transition-all ${
-                  viewMode === 'original' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  viewMode === 'original' ? 'bg-violet-600 text-white shadow-violet-glow font-bold' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                Original (Owner Only)
+                Vault Original Only
               </button>
               <button
                 onClick={() => setViewMode('masked')}
-                className={`px-3 py-1 rounded-lg font-medium transition-all ${
-                  viewMode === 'masked' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  viewMode === 'masked' ? 'bg-violet-600 text-white shadow-violet-glow font-bold' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                Masked Protected Copy
+                Masked Version Only
               </button>
             </div>
+
+            <Link
+              to={`/shares?file=${file.id}`}
+              className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold text-xs shadow-cyan-glow transition-all"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>Share Masked Copy</span>
+            </Link>
           </div>
 
-          {/* Side-by-Side Document Comparison Display (Reference 4) */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Main Inspection Canvas */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
             
-            {/* Original Preview (Owner Only) */}
+            {/* Left Canvas: Vault Original */}
             {(viewMode === 'side-by-side' || viewMode === 'original') && (
-              <div className="glass-panel rounded-3xl p-5 border border-cosmic-border space-y-3">
-                <div className="flex items-center justify-between text-xs pb-3 border-b border-cosmic-border">
-                  <span className="font-semibold text-slate-200 flex items-center">
-                    <Lock className="w-3.5 h-3.5 mr-1.5 text-amber-400" />
-                    Original Vault Document (Unredacted)
+              <div className={`cyber-panel rounded-2xl p-5 space-y-3 ${viewMode === 'original' ? 'md:col-span-2' : ''}`}>
+                <div className="flex items-center justify-between pb-2 border-b border-cosmic-border/60">
+                  <span className="text-xs font-mono font-bold text-amber-400 flex items-center space-x-1.5">
+                    <Lock className="w-3.5 h-3.5 text-amber-400" />
+                    <span>AUTHENTICATED OWNER ORIGINAL (PRIVATE)</span>
                   </span>
-                  <span className="text-[10px] text-amber-400 font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                    OWNER ACCESS ONLY
-                  </span>
+                  <span className="text-[10px] font-mono text-slate-400">Zero Public Exposure</span>
                 </div>
 
-                <div className="h-[460px] bg-cosmic-950 rounded-2xl border border-cosmic-border flex items-center justify-center p-3 overflow-hidden">
+                <div className="bg-cosmic-950/90 rounded-xl p-2 border border-cosmic-border flex items-center justify-center min-h-[360px] max-h-[520px] overflow-hidden">
                   <img
                     src={originalUrl}
                     alt="Original Document"
-                    className="max-h-full max-w-full object-contain rounded-lg shadow-md"
+                    className="max-h-[500px] w-full object-contain rounded-lg"
                   />
                 </div>
               </div>
             )}
 
-            {/* Masked Preview */}
+            {/* Right Canvas: Redacted Protected Image */}
             {(viewMode === 'side-by-side' || viewMode === 'masked') && (
-              <div className="glass-panel rounded-3xl p-5 border border-cosmic-border space-y-3">
-                <div className="flex items-center justify-between text-xs pb-3 border-b border-cosmic-border">
-                  <span className="font-semibold text-slate-200 flex items-center">
-                    <ShieldCheck className="w-3.5 h-3.5 mr-1.5 text-emerald-400" />
-                    Protected Masked Copy (Safe for Sharing)
+              <div className={`cyber-panel rounded-2xl p-5 space-y-3 border-violet-500/30 ${viewMode === 'masked' ? 'md:col-span-2' : ''}`}>
+                <div className="flex items-center justify-between pb-2 border-b border-cosmic-border/60">
+                  <span className="text-xs font-mono font-bold text-emerald-400 flex items-center space-x-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>OPAQUE REDACTED COPY (SHARE-SAFE)</span>
                   </span>
-                  <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                    OPAQUE BLACK REDACTION
-                  </span>
+                  <span className="text-[10px] font-mono text-emerald-400">Solid #000000 Pixel Burn</span>
                 </div>
 
-                <div className="h-[460px] bg-cosmic-950 rounded-2xl border border-cosmic-border flex items-center justify-center p-3 overflow-hidden">
+                <div className="bg-cosmic-950/90 rounded-xl p-2 border border-cosmic-border flex items-center justify-center min-h-[360px] max-h-[520px] overflow-hidden">
                   {maskedUrl ? (
                     <img
                       src={maskedUrl}
-                      alt="Masked Document"
-                      className="max-h-full max-w-full object-contain rounded-lg shadow-md"
+                      alt="Redacted Document"
+                      className="max-h-[500px] w-full object-contain rounded-lg"
                     />
                   ) : (
-                    <div className="text-center p-6 text-slate-500 text-xs">
-                      <CheckCircle className="w-10 h-10 text-emerald-500/40 mx-auto mb-2" />
-                      <p className="text-slate-300 font-semibold">No Sensitive PII Detected</p>
-                      <p className="text-slate-500 mt-1">This document contains no Aadhaar, PAN, phone or email identifiers.</p>
-                    </div>
+                    <p className="text-xs text-slate-400 font-mono">No masked version required (Clean document).</p>
                   )}
                 </div>
               </div>

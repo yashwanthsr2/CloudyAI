@@ -12,7 +12,11 @@ import {
   ExternalLink,
   Ban,
   Send,
-  Loader2
+  Loader2,
+  Lock,
+  Sparkles,
+  KeyRound,
+  FileCheck2
 } from 'lucide-react';
 import { api } from '../services/api';
 import RiskBadge from '../components/RiskBadge';
@@ -94,214 +98,238 @@ export default function SecureSharing({ files = [] }) {
   const ttlMinutes = riskLevel === 'HIGH' ? 5 : riskLevel === 'MEDIUM' ? 10 : 15;
 
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-8">
+    <div className="p-8 max-w-7xl mx-auto space-y-6">
       
-      {/* Title */}
-      <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight flex items-center space-x-2.5">
-          <Share2 className="w-6 h-6 text-indigo-400" />
-          <span>Secure One-to-One Sharing</span>
+      {/* Page Header */}
+      <div className="pb-2 border-b border-cosmic-border/60">
+        <div className="flex items-center space-x-2">
+          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+            EPHEMERAL EXCHANGE
+          </span>
+          <span className="text-slate-400 text-xs">• Zero-Trust Protocol</span>
+        </div>
+        <h1 className="text-2xl font-bold text-white tracking-tight flex items-center space-x-2.5 mt-1">
+          <Share2 className="w-6 h-6 text-violet-400" />
+          <span>Secure One-to-One File Sharing</span>
         </h1>
         <p className="text-xs text-slate-400 mt-1">
-          Issue cryptographically locked sharing links restricted to exactly ONE recipient email with server-enforced OTP verification and atomic one-time download.
+          Issue cryptographically signed one-time sharing links with mandatory recipient email validation, 6-digit dynamic OTP verification, and atomic self-destruct after first download.
         </p>
       </div>
 
-      {error && (
-        <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-2xl flex items-center space-x-3">
-          <AlertTriangle className="w-5 h-5 shrink-0 text-rose-400" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Sharing Creation Panel (Reference 5) */}
-      <div className="glass-panel rounded-3xl p-8 border border-cosmic-border shadow-2xl space-y-6">
-        <h2 className="text-base font-bold text-white tracking-tight">Create Controlled One-Time Share Link</h2>
-
-        <form onSubmit={handleCreateShare} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* 2-Column Split: Share Creator (5 cols) & Active Shares Table (7 cols) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        {/* Left Column: Share Generation Card */}
+        <div className="lg:col-span-5 space-y-4">
           
-          {/* File Selector */}
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1.5">Select Vault Document</label>
-            <select
-              value={selectedFileId}
-              onChange={(e) => setSelectedFileId(e.target.value)}
-              required
-              className="w-full px-3.5 py-2.5 bg-cosmic-950/80 border border-cosmic-border rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
-            >
-              {files.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.filename} — {f.risk_level} Risk
-                </option>
-              ))}
-            </select>
-            {currentFile && (
-              <div className="mt-2 flex items-center space-x-2">
-                <RiskBadge level={currentFile.risk_level} />
-                <span className="text-[11px] text-slate-400 font-mono">
-                  TTL: <strong>{ttlMinutes} Minutes</strong>
-                </span>
+          <div className="cyber-panel-elevated rounded-2xl p-6 space-y-5">
+            <div className="flex items-center space-x-2 pb-3 border-b border-cosmic-border/60">
+              <Lock className="w-4 h-4 text-cyan-400" />
+              <h2 className="text-sm font-bold text-white tracking-tight">
+                Create One-Time Share
+              </h2>
+            </div>
+
+            {error && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs rounded-xl flex items-center space-x-2">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{error}</span>
               </div>
             )}
+
+            <form onSubmit={handleCreateShare} className="space-y-4">
+              
+              {/* File Selection */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono text-slate-400 font-semibold">
+                  SELECT VAULT DOCUMENT:
+                </label>
+                {files.length === 0 ? (
+                  <p className="text-xs text-slate-400 p-3 bg-cosmic-950/80 rounded-xl border border-cosmic-border">
+                    No files available in vault.
+                  </p>
+                ) : (
+                  <select
+                    value={selectedFileId}
+                    onChange={(e) => setSelectedFileId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-cosmic-950 border border-cosmic-border rounded-xl text-xs text-slate-200 focus:outline-none focus:border-violet-500 font-mono"
+                  >
+                    {files.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.filename} ({f.risk_level})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Recipient Email Input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-mono text-slate-400 font-semibold flex items-center justify-between">
+                  <span>AUTHORIZED RECIPIENT EMAIL:</span>
+                  <span className="text-[10px] text-cyan-400 font-normal">Single Recipient Only</span>
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                  <input
+                    type="email"
+                    required
+                    value={recipientEmail}
+                    onChange={(e) => setRecipientEmail(e.target.value)}
+                    placeholder="receiver@company.com"
+                    className="w-full pl-9 pr-4 py-2.5 bg-cosmic-950 border border-cosmic-border rounded-xl text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-violet-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              {/* Dynamic Risk TTL Summary */}
+              {currentFile && (
+                <div className="p-3.5 rounded-xl bg-cosmic-950/80 border border-cosmic-border space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 font-mono text-[11px]">Enforced Expiration:</span>
+                    <span className="font-mono text-cyan-300 font-bold">{ttlMinutes} Minutes TTL</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="text-slate-400 font-mono">Document Risk:</span>
+                    <RiskBadge level={riskLevel} size="sm" />
+                  </div>
+
+                  <div className="pt-2 border-t border-cosmic-border/60 text-[10px] text-slate-400 font-mono flex items-center space-x-1.5">
+                    <Clock className="w-3.5 h-3.5 text-violet-400" />
+                    <span>Countdown starts when token is generated.</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Submit CTA Button */}
+              <button
+                type="submit"
+                disabled={loading || !selectedFileId || !recipientEmail}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-xs shadow-violet-glow flex items-center justify-center space-x-2 transition-all active:scale-[0.98]"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Provisioning Cryptographic Share...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4 text-cyan-300" />
+                    <span>Generate Secure Share Link</span>
+                  </>
+                )}
+              </button>
+            </form>
           </div>
 
-          {/* Authorized Recipient Email */}
-          <div>
-            <label className="block text-xs font-medium text-slate-300 mb-1.5">Authorized Recipient Email</label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-              <input
-                type="email"
-                required
-                value={recipientEmail}
-                onChange={(e) => setRecipientEmail(e.target.value)}
-                placeholder="recipient@organization.com"
-                className="w-full pl-10 pr-4 py-2.5 bg-cosmic-950/80 border border-cosmic-border rounded-xl text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
-              />
+          {/* Success Banner if Share Created */}
+          {createdShare && (
+            <div className="cyber-panel rounded-2xl p-5 border-emerald-500/30 space-y-3">
+              <div className="flex items-center space-x-2 text-emerald-400 text-xs font-mono font-bold">
+                <Check className="w-4 h-4" />
+                <span>EPHEMERAL SHARE LINK GENERATED</span>
+              </div>
+
+              <div className="p-2.5 bg-cosmic-950 rounded-xl border border-cosmic-border font-mono text-[11px] text-slate-200 break-all select-all flex items-center justify-between gap-2">
+                <span className="truncate">{createdShare.share_url}</span>
+                <button
+                  onClick={() => copyToClipboard(createdShare.share_url)}
+                  className="px-2.5 py-1 rounded bg-violet-600 hover:bg-violet-500 text-white text-[10px] font-bold shrink-0 inline-flex items-center space-x-1"
+                >
+                  {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  <span>{copied ? 'Copied' : 'Copy'}</span>
+                </button>
+              </div>
+
+              <div className="text-[10px] text-slate-400 font-mono space-y-1">
+                <p>• Authorized: <strong>{createdShare.authorized_email}</strong></p>
+                <p>• Expiration: <strong>{new Date(createdShare.expires_at).toLocaleTimeString()}</strong> ({ttlMinutes}m)</p>
+                <p className="text-cyan-300">• Recipient must enter email and verify 6-digit OTP to claim.</p>
+              </div>
             </div>
-            <p className="text-[11px] text-slate-500 mt-1.5">
-              Only this email can request and verify the 6-digit OTP to access the file.
-            </p>
-          </div>
+          )}
 
-          {/* Notice & Submit */}
-          <div className="md:col-span-2 pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-t border-cosmic-border">
-            <div className="text-xs text-slate-400 space-y-1">
-              <p className="flex items-center text-emerald-400">
-                <ShieldCheck className="w-4 h-4 mr-1.5" />
-                Atomic One-Time Download: Link automatically becomes invalid after first verified download.
-              </p>
-              <p className="text-[11px] text-slate-500">
-                Recipient will receive an opaque masked copy. Original remains untouched in your private vault.
+        </div>
+
+        {/* Right Column: Active Shares & Transfers Audit Table */}
+        <div className="lg:col-span-7 cyber-panel rounded-2xl p-6 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-cosmic-border/60">
+            <div>
+              <h2 className="text-sm font-bold text-white tracking-tight flex items-center space-x-2">
+                <Clock className="w-4 h-4 text-cyan-400" />
+                <span>Active Ephemeral Transfers</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Real-time lifecycle of all provisioned one-time download links
               </p>
             </div>
 
             <button
-              type="submit"
-              disabled={loading || !selectedFileId}
-              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white font-semibold text-xs shadow-lg shadow-indigo-500/25 flex items-center space-x-2 transition-all disabled:opacity-50 shrink-0"
+              onClick={loadShares}
+              className="p-1.5 rounded-lg bg-cosmic-800 hover:bg-cosmic-750 text-slate-300 text-xs inline-flex items-center space-x-1 border border-cosmic-border transition-colors"
             >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Dispatching...</span>
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4" />
-                  <span>Generate & Send Share</span>
-                </>
-              )}
+              <span>Refresh</span>
             </button>
           </div>
-        </form>
 
-        {/* Share Link Result Banner */}
-        {createdShare && (
-          <div className="p-5 bg-indigo-500/10 border border-indigo-500/25 rounded-2xl space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-indigo-300">🎉 Share Link Generated Successfully</span>
-              <span className="text-[11px] font-mono text-emerald-400">
-                Expires in {createdShare.ttl_minutes} minutes
-              </span>
+          {shares.length === 0 ? (
+            <div className="py-12 text-center text-xs text-slate-400 font-mono space-y-2">
+              <Share2 className="w-8 h-8 mx-auto text-slate-600" />
+              <p>No active or historical transfers found.</p>
             </div>
+          ) : (
+            <div className="divide-y divide-cosmic-border/50">
+              {shares.map((share) => {
+                const isExpired = new Date(share.expires_at) < new Date();
+                const status = share.status || (isExpired ? 'EXPIRED' : 'ACTIVE');
 
-            <div className="flex items-center space-x-2">
-              <input
-                type="text"
-                readOnly
-                value={createdShare.share_url}
-                className="w-full px-3.5 py-2 bg-cosmic-950 border border-cosmic-border rounded-xl text-xs font-mono text-emerald-400 focus:outline-none"
-              />
-              <button
-                onClick={() => copyToClipboard(createdShare.share_url)}
-                className="p-2.5 bg-cosmic-800 hover:bg-cosmic-700 text-slate-200 rounded-xl transition-colors border border-cosmic-border shrink-0"
-                title="Copy link"
-              >
-                {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-              </button>
-            </div>
-
-            <div className="flex justify-between items-center text-[11px] text-slate-400 pt-1">
-              <span>Authorized: <strong>{createdShare.authorized_email}</strong></span>
-              <a
-                href={createdShare.share_url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-indigo-400 hover:text-indigo-300 inline-flex items-center"
-              >
-                <span>Preview Recipient Portal</span>
-                <ExternalLink className="w-3 h-3 ml-1" />
-              </a>
-            </div>
-          </div>
-        )}
-
-      </div>
-
-      {/* Active Shares Management Table */}
-      <div className="glass-panel rounded-3xl p-6 border border-cosmic-border shadow-xl space-y-4">
-        <h2 className="text-base font-bold text-white tracking-tight">Active & Historical One-Time Shares</h2>
-
-        {sharesLoading ? (
-          <div className="py-12 text-center text-xs text-slate-500">Loading share records...</div>
-        ) : shares.length === 0 ? (
-          <div className="py-12 text-center text-xs text-slate-500">No share links generated yet.</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-cosmic-border text-slate-400 font-semibold">
-                  <th className="pb-3 pl-2">File</th>
-                  <th className="pb-3">Authorized Recipient</th>
-                  <th className="pb-3">Expiry</th>
-                  <th className="pb-3">Status</th>
-                  <th className="pb-3 text-right pr-2">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-cosmic-border/60">
-                {shares.map((s) => {
-                  const isExpired = new Date(s.expires_at) <= new Date();
-                  return (
-                    <tr key={s.id} className="hover:bg-cosmic-800/40 transition-colors">
-                      <td className="py-3.5 pl-2 font-medium text-slate-200">
-                        {s.files?.filename || 'Document'}
-                      </td>
-                      <td className="py-3.5 text-slate-300 font-mono text-[11px]">
-                        {s.authorized_email}
-                      </td>
-                      <td className="py-3.5 text-slate-400 font-mono text-[11px]">
-                        {new Date(s.expires_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td className="py-3.5">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
-                          s.status === 'USED' ? 'bg-slate-800 text-slate-400' :
-                          s.status === 'REVOKED' ? 'bg-rose-500/15 text-rose-400' :
-                          isExpired ? 'bg-amber-500/15 text-amber-400' :
-                          s.status === 'VERIFIED' ? 'bg-emerald-500/15 text-emerald-400' :
-                          'bg-indigo-500/15 text-indigo-400'
-                        }`}>
-                          {s.status === 'CREATED' && isExpired ? 'EXPIRED' : s.status}
+                return (
+                  <div key={share.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs font-bold text-white truncate max-w-xs">
+                          {share.file_name || 'Document'}
                         </span>
-                      </td>
-                      <td className="py-3.5 text-right pr-2">
-                        {s.status !== 'USED' && s.status !== 'REVOKED' && !isExpired && (
-                          <button
-                            onClick={() => handleRevoke(s.id)}
-                            className="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 rounded-lg text-[11px] font-medium transition-colors inline-flex items-center space-x-1"
-                          >
-                            <Ban className="w-3 h-3" />
-                            <span>Revoke</span>
-                          </button>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-bold ${
+                          status === 'ACTIVE' ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30' :
+                          status === 'USED' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' :
+                          status === 'REVOKED' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30' :
+                          'bg-slate-800 text-slate-400 border border-slate-700'
+                        }`}>
+                          {status}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400 font-mono">
+                        <span className="text-slate-300">To: {share.authorized_email}</span>
+                        <span>•</span>
+                        <span>Expires: {new Date(share.expires_at).toLocaleTimeString()}</span>
+                        {share.otp_verified && (
+                          <span className="text-emerald-400 font-bold">✓ OTP Verified</span>
                         )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2 shrink-0 self-end sm:self-center">
+                      {status === 'ACTIVE' && (
+                        <button
+                          onClick={() => handleRevoke(share.id)}
+                          className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-[11px] font-medium border border-rose-500/30 transition-colors"
+                        >
+                          Revoke
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+        </div>
+
       </div>
 
     </div>

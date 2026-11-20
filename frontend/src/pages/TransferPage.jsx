@@ -12,7 +12,8 @@ import {
   AlertOctagon, 
   ArrowRight, 
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Sparkles
 } from 'lucide-react';
 import { api } from '../services/api';
 import CosmicBackground from '../components/CosmicBackground';
@@ -60,7 +61,7 @@ export default function TransferPage() {
   useEffect(() => {
     if (step !== 'otp_entry' || otpRemainingSeconds <= 0) return;
     const timer = setInterval(() => {
-      setOtpRemainingSeconds((prev) => (prev <= 1 ? 0 : prev - 1));
+      setOtpRemainingSeconds((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(timer);
   }, [step, otpRemainingSeconds]);
@@ -70,27 +71,39 @@ export default function TransferPage() {
       setLoading(true);
       setError(null);
       const res = await api.getTransferInfo(token);
-      setShareInfo(res.share);
-      setLinkRemainingSeconds(res.share.remaining_seconds || 0);
+      setShareInfo(res);
 
-      if (res.share.status === 'USED') {
+      if (res.is_expired || res.status === 'EXPIRED') {
         setStep('expired_or_used');
-        setError('HTTP 410 Gone: This one-time document has already been accessed and consumed.');
-      } else if (res.share.status === 'REVOKED') {
-        setStep('expired_or_used');
-        setError('HTTP 410 Gone: This share link was revoked by the sender.');
-      } else {
-        setStep('email_entry');
+        setError('HTTP 410 Gone: This secure link has expired.');
+        return;
       }
+
+      if (res.status === 'USED') {
+        setStep('expired_or_used');
+        setError('HTTP 410 Gone: This one-time link has already been consumed and destroyed.');
+        return;
+      }
+
+      if (res.status === 'REVOKED') {
+        setStep('expired_or_used');
+        setError('Access Denied: This link has been revoked by the sender.');
+        return;
+      }
+
+      if (res.seconds_remaining) {
+        setLinkRemainingSeconds(res.seconds_remaining);
+      }
+
+      setStep('email_entry');
     } catch (err) {
       setStep('expired_or_used');
-      setError(err.message || 'This transfer link is invalid or expired.');
+      setError(err.message || 'Unable to access share token.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Step 1: Submit recipient email & request OTP
   const handleRequestOtp = async (e) => {
     e.preventDefault();
     if (!email) return;
@@ -99,86 +112,86 @@ export default function TransferPage() {
       setLoading(true);
       setError(null);
       const res = await api.requestOtp(token, email);
+
+      if (res.otp_expires_at) {
+        setOtpExpiresAt(res.otp_expires_at);
+        setOtpRemainingSeconds(300);
+      }
+      if (res.dev_otp) {
+        setDevOtp(res.dev_otp);
+      }
+
       setStep('otp_entry');
-      setOtpExpiresAt(res.otp_expires_at);
-      setOtpRemainingSeconds(300);
-      if (res.dev_otp) setDevOtp(res.dev_otp);
+      setTimeout(() => {
+        digitInputRefs.current[0]?.focus();
+      }, 100);
     } catch (err) {
-      setError(err.message || 'Access denied: You are not the authorized recipient.');
+      setError(err.message || 'Access denied. Please verify your email address.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle 6 individual OTP digit boxes with auto-focus (Reference 1)
-  const handleDigitChange = (index, value) => {
+  const handleOtpChange = (index, value) => {
     if (!/^\d*$/.test(value)) return;
 
     const newDigits = [...otpDigits];
     newDigits[index] = value.slice(-1);
     setOtpDigits(newDigits);
 
-    // Auto-focus next input box
     if (value && index < 5) {
       digitInputRefs.current[index + 1]?.focus();
     }
   };
 
-  const handleDigitKeyDown = (index, e) => {
+  const handleOtpKeyDown = (index, e) => {
     if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
       digitInputRefs.current[index - 1]?.focus();
     }
   };
 
-  const handlePasteOtp = (e) => {
+  const handleOtpPaste = (e) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (pasted.length === 6) {
-      setOtpDigits(pasted.split(''));
-      digitInputRefs.current[5]?.focus();
+    const paste = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (!paste) return;
+
+    const newDigits = [...otpDigits];
+    for (let i = 0; i < paste.length; i++) {
+      newDigits[i] = paste[i];
     }
+    setOtpDigits(newDigits);
+
+    const nextIndex = Math.min(paste.length, 5);
+    digitInputRefs.current[nextIndex]?.focus();
   };
 
-  // Step 2: Verify OTP
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
-    const fullOtp = otpDigits.join('');
-    if (fullOtp.length !== 6) {
-      setError('Please enter the full 6-digit verification code.');
+    const otp = otpDigits.join('');
+    if (otp.length !== 6) {
+      setError('Please enter all 6 digits of your one-time verification code.');
       return;
     }
 
     try {
       setLoading(true);
       setError(null);
-      await api.verifyOtp(token, email, fullOtp);
+      await api.verifyOtp(token, email, otp);
       setStep('verified_download');
     } catch (err) {
-      setError(err.message || 'Invalid or expired OTP code.');
+      setError(err.message || 'Invalid verification code. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Step 3: Atomic One-Time Download
   const handleDownload = async () => {
     try {
       setLoading(true);
-      const blob = await api.downloadMaskedFile(token, email);
-      
-      // Trigger browser file download
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = `masked-${shareInfo?.filename || 'document.png'}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(blobUrl);
-
-      // Immediately transition to consumed state
+      setError(null);
+      await api.downloadMaskedFile(token, email);
       setStep('expired_or_used');
-      setError('HTTP 410 Gone: Download completed. This one-time link is now closed.');
+      setError('HTTP 410 Gone: Download completed. This one-time link has now been permanently destroyed.');
     } catch (err) {
       setError(err.message || 'Download failed or share expired.');
     } finally {
@@ -193,38 +206,40 @@ export default function TransferPage() {
   };
 
   return (
-    <div className="min-h-screen bg-cosmic-950 flex flex-col items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-cosmic-950 flex flex-col items-center justify-center p-4 relative overflow-hidden selection:bg-violet-600/30">
       
       {/* Cosmic Animated Starfield Background */}
       <CosmicBackground />
 
       {/* Main Recipient Card */}
-      <div className="relative z-10 max-w-lg w-full glass-panel rounded-3xl p-8 border border-cosmic-border shadow-2xl">
+      <div className="relative z-10 max-w-lg w-full cyber-panel-elevated rounded-3xl p-8 border border-cosmic-border shadow-2xl">
         
         {/* Top Security Banner */}
-        <div className="flex items-center justify-between pb-5 border-b border-cosmic-border mb-6">
+        <div className="flex items-center justify-between pb-5 border-b border-cosmic-border/60 mb-6">
           <div className="flex items-center space-x-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-              <Shield className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 to-cyan-500 p-[1px] shadow-violet-glow">
+              <div className="w-full h-full bg-cosmic-950 rounded-[11px] flex items-center justify-center">
+                <Shield className="w-4 h-4 text-cyan-400" />
+              </div>
             </div>
             <div>
-              <span className="font-extrabold text-xs text-white tracking-tight">PRIVACLOUD AI</span>
-              <span className="text-[10px] text-slate-400 block -mt-0.5">Secure One-Time Transfer</span>
+              <span className="font-extrabold text-xs text-white tracking-wider">PRIVACLOUD AI</span>
+              <span className="text-[10px] text-slate-400 block -mt-0.5 font-mono">Zero-Trust Ephemeral Portal</span>
             </div>
           </div>
 
           {linkRemainingSeconds > 0 && step !== 'expired_or_used' && (
-            <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 font-mono text-[11px] font-semibold">
+            <div className="flex items-center space-x-1.5 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-400 font-mono text-[11px] font-bold">
               <Clock className="w-3.5 h-3.5 animate-pulse" />
-              <span>{formatTimer(linkRemainingSeconds)}</span>
+              <span>TTL: {formatTimer(linkRemainingSeconds)}</span>
             </div>
           )}
         </div>
 
         {error && (
-          <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-2xl mb-6 flex items-start space-x-2.5">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>{error}</span>
+          <div className="p-4 bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs rounded-xl mb-6 flex items-start space-x-2.5">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+            <span className="leading-relaxed">{error}</span>
           </div>
         )}
 
@@ -232,28 +247,28 @@ export default function TransferPage() {
         {step === 'email_entry' && (
           <form onSubmit={handleRequestOtp} className="space-y-5">
             <div className="text-center space-y-1.5">
-              <h2 className="text-lg font-bold text-white tracking-tight">Authorized Identity Verification</h2>
+              <h2 className="text-lg font-bold text-white tracking-tight">Authorized Recipient Verification</h2>
               <p className="text-xs text-slate-400">
-                A confidential document <code>{shareInfo?.filename}</code> has been shared with an authorized recipient.
+                A confidential document <code>{shareInfo?.filename}</code> has been shared with an authorized email recipient.
               </p>
               {shareInfo?.authorized_email_hint && (
-                <p className="text-[11px] text-indigo-400 font-mono">
+                <p className="text-[11px] text-cyan-300 font-mono">
                   Authorized hint: {shareInfo.authorized_email_hint}
                 </p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1.5">Enter Your Email Address</label>
+              <label className="block text-xs font-mono font-semibold text-slate-300 mb-1.5">ENTER YOUR EMAIL ADDRESS</label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="your.email@organization.com"
-                  className="w-full pl-10 pr-4 py-2.5 bg-cosmic-950/80 border border-cosmic-border rounded-xl text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500"
+                  placeholder="recipient@company.com"
+                  className="w-full pl-10 pr-4 py-2.5 bg-cosmic-950 border border-cosmic-border rounded-xl text-xs text-slate-200 placeholder-slate-400 focus:outline-none focus:border-violet-500 font-medium"
                 />
               </div>
             </div>
@@ -261,71 +276,69 @@ export default function TransferPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-500 via-indigo-600 to-indigo-700 hover:from-indigo-600 hover:to-indigo-800 text-white font-semibold text-xs shadow-lg shadow-indigo-500/25 flex items-center justify-center space-x-2 transition-all disabled:opacity-50"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs shadow-violet-glow flex items-center justify-center space-x-2 transition-all active:scale-[0.98]"
             >
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Verifying Recipient...</span>
+                  <span>Verifying Recipient Authorization...</span>
                 </>
               ) : (
                 <>
-                  <span>Request 6-Digit Passcode</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <span>Request 6-Digit OTP</span>
+                  <ArrowRight className="w-4 h-4 text-cyan-300" />
                 </>
               )}
             </button>
           </form>
         )}
 
-        {/* State 2: Six-Digit OTP Input Interface (Reference 1) */}
+        {/* State 2: OTP Verification Screen */}
         {step === 'otp_entry' && (
           <form onSubmit={handleVerifyOtp} className="space-y-6">
-            <div className="text-center space-y-1.5">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center mx-auto mb-2">
+            <div className="text-center space-y-1">
+              <div className="w-12 h-12 mx-auto rounded-2xl bg-violet-600/20 border border-violet-500/30 flex items-center justify-center text-cyan-300 mb-3">
                 <KeyRound className="w-6 h-6" />
               </div>
-              <h2 className="text-lg font-bold text-white tracking-tight">Enter 6-Digit OTP</h2>
+              <h2 className="text-base font-bold text-white tracking-tight">Enter Verification Code</h2>
               <p className="text-xs text-slate-400">
-                A verification code was dispatched to <strong>{email}</strong>.
+                We sent a 6-digit numeric OTP to <strong className="text-white">{email}</strong>
               </p>
             </div>
 
-            {/* Development OTP Banner for seamless demo testing */}
+            {/* Dev Mock Banner if SMTP in simulation mode */}
             {devOtp && (
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/25 rounded-xl text-center text-xs text-emerald-300">
-                <span className="font-mono font-bold">Demo OTP: {devOtp}</span> (Displayed in standalone evaluation mode)
+              <div className="p-3 bg-cyan-950/40 border border-cyan-500/30 rounded-xl text-center">
+                <p className="text-[10px] text-cyan-300 font-mono uppercase tracking-wider">Evaluation Code (Local Mode):</p>
+                <p className="text-xl font-bold font-mono text-white tracking-widest mt-0.5">{devOtp}</p>
               </div>
             )}
 
-            {/* 6 Individual Digit Boxes */}
-            <div className="flex justify-center space-x-2.5 sm:space-x-3" onPaste={handlePasteOtp}>
+            {/* 6 Individual Digit Inputs with Auto-Focus */}
+            <div className="flex justify-center space-x-2.5 onPaste={handleOtpPaste}">
               {otpDigits.map((digit, idx) => (
                 <input
                   key={idx}
                   ref={(el) => (digitInputRefs.current[idx] = el)}
                   type="text"
+                  inputMode="numeric"
                   maxLength={1}
                   value={digit}
-                  onChange={(e) => handleDigitChange(idx, e.target.value)}
-                  onKeyDown={(e) => handleDigitKeyDown(idx, e)}
-                  className="w-11 h-13 sm:w-12 sm:h-14 bg-cosmic-950 border border-cosmic-border rounded-xl text-center font-mono text-xl font-bold text-emerald-400 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 shadow-inner"
+                  onChange={(e) => handleOtpChange(idx, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                  onPaste={handleOtpPaste}
+                  className="w-11 h-13 text-center text-lg font-bold font-mono bg-cosmic-950 border border-cosmic-border rounded-xl text-white focus:outline-none focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 transition-all shadow-inner"
                 />
               ))}
             </div>
 
-            {/* OTP Expiry Countdown & Resend */}
-            <div className="flex items-center justify-between text-xs text-slate-400">
-              <span className="flex items-center font-mono">
-                <Clock className="w-3.5 h-3.5 mr-1 text-amber-400" />
-                Code expires: {formatTimer(otpRemainingSeconds)}
-              </span>
-
+            <div className="flex items-center justify-between text-xs font-mono text-slate-400">
+              <span>Code expires in: <strong className="text-cyan-300">{formatTimer(otpRemainingSeconds)}</strong></span>
               <button
                 type="button"
                 onClick={handleRequestOtp}
-                disabled={otpRemainingSeconds > 240}
-                className="text-indigo-400 hover:text-indigo-300 disabled:opacity-40 disabled:hover:text-indigo-400 font-medium"
+                disabled={loading}
+                className="text-violet-400 hover:text-violet-300 underline"
               >
                 Resend Code
               </button>
@@ -334,94 +347,88 @@ export default function TransferPage() {
             <button
               type="submit"
               disabled={loading || otpDigits.join('').length !== 6}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold text-xs shadow-lg shadow-emerald-500/25 flex items-center justify-center space-x-2 transition-all disabled:opacity-50"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-xs shadow-violet-glow flex items-center justify-center space-x-2 transition-all active:scale-[0.98]"
             >
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Validating Passcode...</span>
+                  <span>Validating OTP Hash...</span>
                 </>
               ) : (
                 <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Authorize Single-Use Download</span>
+                  <span>Verify Code & Unlock Download</span>
+                  <ArrowRight className="w-4 h-4 text-cyan-300" />
                 </>
               )}
             </button>
           </form>
         )}
 
-        {/* State 3: Verified & Ready for Atomic One-Time Download */}
+        {/* State 3: Download Claim Ready */}
         {step === 'verified_download' && (
-          <div className="space-y-6 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
-              <ShieldCheck className="w-8 h-8" />
+          <div className="text-center space-y-6">
+            <div className="w-16 h-16 mx-auto rounded-3xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-emerald-glow">
+              <CheckCircle2 className="w-8 h-8" />
             </div>
 
-            <div className="space-y-1">
-              <h2 className="text-lg font-bold text-white tracking-tight">Identity Verified & Access Granted</h2>
-              <p className="text-xs text-slate-400">
-                Document: <strong>{shareInfo?.filename}</strong> &bull; Sensitivity: {shareInfo?.risk_level}
+            <div className="space-y-1.5">
+              <h2 className="text-lg font-bold text-white tracking-tight">Identity Verified Successfully</h2>
+              <p className="text-xs text-slate-300 max-w-sm mx-auto">
+                You are authorized to claim one single-use download of the server-redacted document:
               </p>
+              <p className="font-mono text-xs font-bold text-cyan-300">{shareInfo?.filename}</p>
             </div>
 
-            <div className="p-4 bg-cosmic-950/80 rounded-2xl border border-cosmic-border text-xs text-slate-300 text-left space-y-2">
-              <div className="font-semibold text-emerald-400 flex items-center">
-                <Lock className="w-3.5 h-3.5 mr-1.5" />
-                DLP Privacy Redaction Applied:
-              </div>
-              <p className="text-[11px] text-slate-400">
-                All personal identifiers (Aadhaar, PAN, phone numbers) are permanently obscured with solid pixel masks. The unredacted original remains secure in the vault.
+            <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-xs text-amber-300 text-left space-y-1">
+              <p className="font-semibold flex items-center space-x-1.5">
+                <AlertTriangle className="w-4 h-4 text-amber-400" />
+                <span>Single-Use Atomic Protection</span>
               </p>
-              <div className="text-[10px] text-rose-400 font-semibold pt-1 border-t border-cosmic-border">
-                ⚠️ Strict Single-Use Policy: This document can only be downloaded once. After downloading, this link will be closed permanently.
-              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Clicking download triggers an atomic PostgreSQL lock. The share transitions to <code>USED</code> status immediately and cannot be claimed again.
+              </p>
             </div>
 
             <button
               onClick={handleDownload}
               disabled={loading}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold text-xs shadow-xl shadow-emerald-500/25 flex items-center justify-center space-x-2 transition-all disabled:opacity-50"
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold text-xs shadow-emerald-glow flex items-center justify-center space-x-2 transition-all active:scale-[0.98]"
             >
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Streaming Masked Copy...</span>
+                  <span>Streaming Redacted Binary...</span>
                 </>
               ) : (
                 <>
                   <Download className="w-4 h-4" />
-                  <span>Download Masked Copy (One-Time)</span>
+                  <span>Download Redacted Document (Single Use)</span>
                 </>
               )}
             </button>
           </div>
         )}
 
-        {/* State 4: Expired or Already Used */}
+        {/* State 4: Expired or Used */}
         {step === 'expired_or_used' && (
           <div className="text-center space-y-4 py-4">
-            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto">
+            <div className="w-16 h-16 mx-auto rounded-3xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
               <AlertOctagon className="w-8 h-8" />
             </div>
 
-            <div>
-              <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-cosmic-950 text-slate-400 border border-cosmic-border">
-                HTTP 410 GONE
-              </span>
-              <h2 className="text-lg font-bold text-white tracking-tight mt-2">Access Closed</h2>
-              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">
-                This transfer link has either reached its time-to-live expiration or has already been consumed through a verified one-time download.
+            <div className="space-y-1">
+              <h2 className="text-base font-bold text-white">Transfer Link Closed</h2>
+              <p className="text-xs text-slate-400 max-w-xs mx-auto">
+                This secure one-time link has expired or has already been downloaded.
               </p>
             </div>
+
+            <p className="text-[11px] font-mono text-slate-400">HTTP 410 GONE • Zero Plaintext Retained</p>
           </div>
         )}
 
-        <div className="mt-8 pt-4 border-t border-cosmic-border text-center text-[10px] text-slate-500">
-          Powered by PRIVACLOUD AI &bull; Cryptographically Enforced Cloud Privacy
-        </div>
-
       </div>
+
     </div>
   );
 }

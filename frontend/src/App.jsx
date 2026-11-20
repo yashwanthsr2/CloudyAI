@@ -16,7 +16,7 @@ import { api } from './services/api';
 
 function AppLayout({ children, files, quota, onRefresh, searchQuery, onSearch }) {
   return (
-    <div className="min-h-screen flex bg-cosmic-950 text-slate-100 antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
+    <div className="min-h-screen flex bg-cosmic-950 text-slate-100 antialiased selection:bg-violet-600/30 selection:text-violet-200">
       {/* Reference 2 Left Navigation Sidebar */}
       <Sidebar quota={quota} />
 
@@ -61,7 +61,7 @@ function AuthenticatedApp() {
     return (
       <div className="min-h-screen bg-cosmic-950 flex items-center justify-center">
         <div className="flex flex-col items-center space-y-4">
-          <div className="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" />
           <p className="text-xs text-slate-400 font-mono tracking-wide">Initializing PrivaCloud Security Enclave...</p>
         </div>
       </div>
