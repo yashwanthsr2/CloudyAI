@@ -1,8 +1,8 @@
 import crypto from 'crypto';
-import { isConfigured, supabase, STORAGE_BUCKET, localStore } from '../config/supabase.js';
+import { isConfigured, supabase, STORAGE_BUCKET, localStore, USER_QUOTA_BYTES, MAX_FILE_SIZE_BYTES } from '../config/supabase.js';
 
 /**
- * Upload a document to private storage & register in files table
+ * Upload a document to private storage & enforce 100MB per-user quota
  */
 export async function uploadFile(req, res) {
   try {
@@ -17,111 +17,143 @@ export async function uploadFile(req, res) {
     const sizeBytes = req.file.size;
     const fileBuffer = req.file.buffer;
 
-    // Secure isolated path: <userId>/<fileId>-<safeFilename>
+    // 1. Enforce individual file size limit (5MB)
+    if (sizeBytes > MAX_FILE_SIZE_BYTES) {
+      return res.status(400).json({
+        success: false,
+        error: `File exceeds maximum individual limit of 5 MB (${(sizeBytes / (1024 * 1024)).toFixed(2)} MB uploaded).`
+      });
+    }
+
+    // 2. Enforce total per-user storage quota (100MB)
+    let currentUsed = 0;
+    if (isConfigured && supabase) {
+      const { data: userFiles, error: sumErr } = await supabase
+        .from('files')
+        .select('size_bytes')
+        .eq('user_id', userId);
+
+      if (!sumErr && userFiles) {
+        currentUsed = userFiles.reduce((acc, f) => acc + (f.size_bytes || 0), 0);
+      }
+    } else {
+      currentUsed = await localStore.getUserStorageUsed(userId);
+    }
+
+    if (currentUsed + sizeBytes > USER_QUOTA_BYTES) {
+      return res.status(400).json({
+        success: false,
+        error: `Storage quota exceeded. You have used ${(currentUsed / (1024 * 1024)).toFixed(1)} MB of your 100 MB quota.`
+      });
+    }
+
+    // 3. Isolated private storage path: <userId>/<fileId>-<safeName>
     const safeFilename = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const storagePath = `${userId}/${fileId}-${safeFilename}`;
+    const storagePathOriginal = `${userId}/${fileId}-${safeFilename}`;
+
+    const fileRecord = {
+      id: fileId,
+      user_id: userId,
+      filename: originalName,
+      storage_path_original: storagePathOriginal,
+      storage_path_masked: null,
+      size_bytes: sizeBytes,
+      mime_type: mimeType,
+      risk_level: 'NONE',
+      risk_reason: 'Awaiting privacy scan',
+      detected_info: { aadhaar: 0, pan: 0, phone: 0, email: 0 },
+      scan_status: 'PENDING',
+      masking_status: 'NONE',
+      ocr_confidence: 0
+    };
 
     if (isConfigured && supabase) {
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadErr } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .upload(storagePath, fileBuffer, {
-          contentType: mimeType,
-          upsert: false
-        });
+        .upload(storagePathOriginal, fileBuffer, { contentType: mimeType, upsert: false });
 
-      if (uploadError) {
-        throw new Error(`Storage upload failed: ${uploadError.message}`);
-      }
+      if (uploadErr) throw new Error(`Storage upload failed: ${uploadErr.message}`);
 
-      // Record in files table
-      const { data: fileData, error: dbError } = await supabase
+      const { data: inserted, error: dbErr } = await supabase
         .from('files')
-        .insert([{
-          id: fileId,
-          user_id: userId,
-          filename: originalName,
-          storage_path: storagePath,
-          mime_type: mimeType,
-          size_bytes: sizeBytes
-        }])
+        .insert([fileRecord])
         .select()
         .single();
 
-      if (dbError) {
-        throw new Error(`Database insert failed: ${dbError.message}`);
-      }
+      if (dbErr) throw new Error(`Database error: ${dbErr.message}`);
+
+      // Log Security Event
+      await supabase.from('security_events').insert([{
+        user_id: userId,
+        file_id: fileId,
+        event_type: 'FILE_UPLOAD',
+        event_status: 'SUCCESS',
+        safe_metadata: { filename: originalName, size_bytes: sizeBytes, mime_type: mimeType }
+      }]);
 
       return res.status(201).json({
         success: true,
-        message: 'File uploaded successfully to private storage.',
-        file: fileData
+        message: 'File uploaded to private vault.',
+        file: inserted
       });
     } else {
-      // Local fallback
-      await localStore.uploadFile(storagePath, fileBuffer, mimeType);
-      const fileRecord = await localStore.insertFile({
-        id: fileId,
+      await localStore.uploadFile(storagePathOriginal, fileBuffer, mimeType);
+      const inserted = await localStore.insertFile(fileRecord);
+
+      await localStore.recordSecurityEvent({
         user_id: userId,
-        filename: originalName,
-        storage_path: storagePath,
-        mime_type: mimeType,
-        size_bytes: sizeBytes
+        file_id: fileId,
+        event_type: 'FILE_UPLOAD',
+        event_status: 'SUCCESS',
+        safe_metadata: { filename: originalName, size_bytes: sizeBytes, mime_type: mimeType }
       });
 
       return res.status(201).json({
         success: true,
-        message: 'File uploaded successfully (Local Sandbox Mode).',
-        file: fileRecord
+        message: 'File uploaded to private vault (Sandbox Mode).',
+        file: inserted
       });
     }
   } catch (err) {
     console.error('Upload error:', err);
-    return res.status(500).json({ success: false, error: err.message || 'File upload failed.' });
+    return res.status(500).json({ success: false, error: err.message });
   }
 }
 
 /**
- * List all files belonging to authenticated user with their scan status
+ * List all files for the authenticated user and return quota usage
  */
 export async function listFiles(req, res) {
   try {
     const userId = req.user.id;
+    let files = [];
+    let usedBytes = 0;
 
     if (isConfigured && supabase) {
-      const { data: files, error } = await supabase
+      const { data, error } = await supabase
         .from('files')
-        .select(`
-          *,
-          scans (
-            id,
-            risk_score,
-            risk_level,
-            count_aadhaar,
-            count_pan,
-            count_phone,
-            count_email,
-            masked_path,
-            scanned_at
-          )
-        `)
+        .select('*')
         .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+        .order('uploaded_at', { ascending: false });
 
       if (error) throw error;
-      return res.json({ success: true, files: files || [] });
+      files = data || [];
+      usedBytes = files.reduce((acc, f) => acc + (f.size_bytes || 0), 0);
     } else {
-      const userFiles = await localStore.getFilesByUser(userId);
-      const results = [];
-      for (const f of userFiles) {
-        const scan = await localStore.getScanByFileId(f.id);
-        results.push({
-          ...f,
-          scans: scan ? [scan] : []
-        });
-      }
-      return res.json({ success: true, files: results });
+      files = await localStore.getFilesByUser(userId);
+      usedBytes = await localStore.getUserStorageUsed(userId);
     }
+
+    return res.json({
+      success: true,
+      quota: {
+        used_bytes: usedBytes,
+        total_bytes: USER_QUOTA_BYTES,
+        remaining_bytes: Math.max(0, USER_QUOTA_BYTES - usedBytes),
+        percent_used: Math.min(100, Math.round((usedBytes / USER_QUOTA_BYTES) * 100))
+      },
+      files
+    });
   } catch (err) {
     console.error('List files error:', err);
     return res.status(500).json({ success: false, error: err.message });
@@ -129,48 +161,73 @@ export async function listFiles(req, res) {
 }
 
 /**
- * Delete a file and associated masked copies
+ * Get single file metadata
+ */
+export async function getFile(req, res) {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    let file = null;
+
+    if (isConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('files')
+        .select('*')
+        .eq('id', id)
+        .eq('user_id', userId)
+        .single();
+      if (error || !file) return res.status(404).json({ success: false, error: 'File not found' });
+      file = data;
+    } else {
+      file = await localStore.getFileById(id);
+      if (!file || file.user_id !== userId) {
+        return res.status(404).json({ success: false, error: 'File not found' });
+      }
+    }
+
+    return res.json({ success: true, file });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+}
+
+/**
+ * Delete a file and associated masked copy from storage and database
  */
 export async function deleteFile(req, res) {
   try {
-    const { file_id } = req.params;
+    const { id } = req.params;
     const userId = req.user.id;
 
     if (isConfigured && supabase) {
-      // Verify ownership
       const { data: file, error: fetchErr } = await supabase
         .from('files')
         .select('*')
-        .eq('id', file_id)
+        .eq('id', id)
         .eq('user_id', userId)
         .single();
 
       if (fetchErr || !file) {
-        return res.status(404).json({ success: false, error: 'File not found or unauthorized.' });
+        return res.status(404).json({ success: false, error: 'File not found or unauthorized' });
       }
 
-      // Check scan for masked path
-      const { data: scan } = await supabase
-        .from('scans')
-        .select('masked_path')
-        .eq('file_id', file_id)
-        .maybeSingle();
+      const pathsToRemove = [file.storage_path_original];
+      if (file.storage_path_masked) pathsToRemove.push(file.storage_path_masked);
 
-      const pathsToDelete = [file.storage_path];
-      if (scan && scan.masked_path) {
-        pathsToDelete.push(scan.masked_path);
-      }
+      await supabase.storage.from(STORAGE_BUCKET).remove(pathsToRemove);
+      await supabase.from('files').delete().eq('id', id);
 
-      await supabase.storage.from(STORAGE_BUCKET).remove(pathsToDelete);
-      await supabase.from('files').delete().eq('id', file_id);
-
-      return res.json({ success: true, message: 'File deleted successfully.' });
+      return res.json({ success: true, message: 'File deleted permanently' });
     } else {
-      await localStore.deleteFile(file_id);
-      return res.json({ success: true, message: 'File deleted successfully.' });
+      const file = await localStore.getFileById(id);
+      if (!file || file.user_id !== userId) {
+        return res.status(404).json({ success: false, error: 'File not found or unauthorized' });
+      }
+      await localStore.deleteFile(id);
+      return res.json({ success: true, message: 'File deleted permanently' });
     }
   } catch (err) {
-    console.error('Delete error:', err);
+    console.error('Delete file error:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 }

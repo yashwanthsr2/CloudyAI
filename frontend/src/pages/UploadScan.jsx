@@ -1,70 +1,122 @@
 import React, { useState } from 'react';
-import { UploadCloud, Shield, CheckCircle2, AlertTriangle, Eye, Share2, FileText, ArrowRight, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { 
+  UploadCloud, 
+  FileImage, 
+  AlertTriangle, 
+  CheckCircle2, 
+  ScanEye, 
+  ArrowRight, 
+  Loader2, 
+  ShieldCheck, 
+  X,
+  FileCheck2
+} from 'lucide-react';
 import { api } from '../services/api';
 import RiskBadge from '../components/RiskBadge';
-import ShareModal from '../components/ShareModal';
-import MaskedPreviewModal from '../components/MaskedPreviewModal';
 
-export default function UploadScan() {
-  const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState(null);
+export default function UploadScan({ onUploadComplete, quota }) {
+  const [dragActive, setDragActive] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [scanStage, setScanStage] = useState(''); // 'uploading' | 'scanning' | 'masking' | 'done'
-  const [result, setResult] = useState(null);
+  const [scanStep, setScanStep] = useState(''); // 'uploading' | 'scanning' | 'masking' | 'completed'
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState(null);
+  const [scanResult, setScanResult] = useState(null);
 
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const navigate = useNavigate();
 
-  const handleFileChange = (e) => {
-    const selected = e.target.files?.[0];
-    if (!selected) return;
+  const validateAndSelectFile = (file) => {
+    setError(null);
+    setScanResult(null);
 
-    if (selected.size > 5 * 1024 * 1024) {
-      setError('File size exceeds 5MB limit. Please choose a smaller document.');
+    // 1. Enforce JPG, JPEG, PNG only
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    const validExtensions = /\.(jpe?g|png)$/i;
+
+    if (!validTypes.includes(file.type.toLowerCase()) && !validExtensions.test(file.name)) {
+      setError('Invalid file format: Only JPG, JPEG, and PNG images are supported. PDF documents are not accepted.');
+      setSelectedFile(null);
+      setPreviewUrl(null);
       return;
     }
 
-    setFile(selected);
-    setError(null);
-    setResult(null);
+    // 2. Enforce 5 MB individual limit
+    if (file.size > 5 * 1024 * 1024) {
+      setError(`File size (${(file.size / (1024 * 1024)).toFixed(2)} MB) exceeds the 5 MB maximum limit.`);
+      setSelectedFile(null);
+      setPreviewUrl(null);
+      return;
+    }
 
-    if (selected.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = () => setPreview(reader.result);
-      reader.readAsDataURL(selected);
-    } else {
-      setPreview(null);
+    // 3. Enforce 100 MB total quota
+    const used = quota?.used_bytes || 0;
+    if (used + file.size > 100 * 1024 * 1024) {
+      setError(`Cannot upload: Adding this file would exceed your 100 MB vault storage quota.`);
+      setSelectedFile(null);
+      setPreviewUrl(null);
+      return;
+    }
+
+    setSelectedFile(file);
+
+    // Create image preview
+    const reader = new FileReader();
+    reader.onload = () => setPreviewUrl(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      validateAndSelectFile(e.dataTransfer.files[0]);
     }
   };
 
   const handleUploadAndScan = async () => {
-    if (!file) return;
+    if (!selectedFile) return;
 
     try {
       setUploading(true);
       setError(null);
+      setProgress(20);
 
-      // Stage 1: Upload to private storage
-      setScanStage('uploading');
+      // Step 1: Upload to private storage
+      setScanStep('uploading');
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', selectedFile);
       const uploadRes = await api.uploadFile(formData);
       const uploadedFile = uploadRes.file;
 
-      // Stage 2: Trigger Privacy Scanner
-      setScanStage('scanning');
+      setProgress(60);
+
+      // Step 2: Trigger OCR Privacy Scan & Masking
+      setScanStep('scanning');
       const scanRes = await api.scanFile(uploadedFile.id);
 
-      setScanStage('done');
-      setResult({
-        file: {
-          ...uploadedFile,
-          scans: [scanRes.scan]
-        },
+      setProgress(100);
+      setScanStep('completed');
+      setScanResult({
+        file: scanRes.file,
         scan: scanRes.scan
       });
+
+      if (onUploadComplete) onUploadComplete();
     } catch (err) {
+      console.error(err);
       setError(err.message || 'Scan process encountered an error');
     } finally {
       setUploading(false);
@@ -72,181 +124,213 @@ export default function UploadScan() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="p-8 max-w-4xl mx-auto space-y-6">
       
-      {/* Page Title */}
+      {/* Title */}
       <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight flex items-center space-x-2">
-          <UploadCloud className="w-6 h-6 text-emerald-400" />
+        <h1 className="text-2xl font-bold text-white tracking-tight flex items-center space-x-2.5">
+          <UploadCloud className="w-6 h-6 text-indigo-400" />
           <span>Upload & Privacy Scan</span>
         </h1>
         <p className="text-xs text-slate-400 mt-1">
-          Upload any identity document (Aadhaar, PAN card, utility bill, statement). The system will automatically detect sensitive text and generate an opaque redacted copy.
+          Strictly accepts JPG, JPEG, and PNG images up to 5 MB. Documents are stored in an encrypted vault and analyzed via OCR for Aadhaar, PAN, phone, and email detection.
         </p>
       </div>
 
       {error && (
-        <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs rounded-xl flex items-center space-x-2">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span>{error}</span>
+        <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs rounded-2xl flex items-start space-x-3">
+          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-rose-400" />
+          <div>
+            <p className="font-semibold">Upload Validation Notice</p>
+            <p className="mt-0.5 text-slate-300">{error}</p>
+          </div>
         </div>
       )}
 
-      {/* Upload Box */}
-      {!result ? (
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
-          <div className="border-2 border-dashed border-slate-700 hover:border-emerald-500/60 rounded-2xl p-8 text-center transition-colors relative cursor-pointer group">
+      {/* Main Upload / Drag-and-Drop Area (Reference 3) */}
+      {!scanResult ? (
+        <div className="glass-panel rounded-3xl p-8 border border-cosmic-border shadow-2xl space-y-6">
+          
+          <div
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all cursor-pointer relative group ${
+              dragActive 
+                ? 'border-indigo-400 bg-indigo-500/10 scale-[1.01]' 
+                : 'border-cosmic-border hover:border-indigo-500/50 bg-cosmic-950/40'
+            }`}
+          >
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp,application/pdf"
-              onChange={handleFileChange}
+              accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+              onChange={(e) => e.target.files?.[0] && validateAndSelectFile(e.target.files[0])}
               disabled={uploading}
               className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
             />
-            
+
             <div className="flex flex-col items-center">
-              <div className="w-14 h-14 rounded-2xl bg-slate-800 group-hover:bg-emerald-500/10 flex items-center justify-center text-slate-400 group-hover:text-emerald-400 transition-colors mb-3">
-                <UploadCloud className="w-7 h-7" />
+              <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 group-hover:scale-110 flex items-center justify-center text-indigo-400 mb-4 transition-transform shadow-lg shadow-indigo-500/10">
+                <UploadCloud className="w-8 h-8" />
               </div>
               <p className="text-sm font-semibold text-slate-200">
-                {file ? file.name : 'Click to browse or drag and drop document'}
+                {selectedFile ? selectedFile.name : 'Click to browse or drag and drop image here'}
               </p>
-              <p className="text-xs text-slate-500 mt-1">
-                Supports JPEG, PNG, WebP, PDF &bull; Maximum file size: 5MB
+              <p className="text-xs text-slate-500 mt-1.5 font-mono">
+                JPG &bull; JPEG &bull; PNG &bull; Max 5 MB per document
               </p>
             </div>
           </div>
 
-          {/* Selected File Card */}
-          {file && (
-            <div className="p-4 bg-slate-950 border border-slate-800 rounded-2xl flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="p-2.5 bg-slate-800 rounded-xl text-emerald-400">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-white">{file.name}</p>
-                  <p className="text-[11px] text-slate-400 font-mono">{(file.size / 1024).toFixed(1)} KB</p>
+          {/* Selected File Details & Preview */}
+          {selectedFile && (
+            <div className="p-4 bg-cosmic-950/80 rounded-2xl border border-cosmic-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center space-x-3.5 truncate">
+                {previewUrl ? (
+                  <img src={previewUrl} alt="Preview" className="w-12 h-12 rounded-xl object-cover border border-cosmic-border shrink-0" />
+                ) : (
+                  <div className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 shrink-0">
+                    <FileImage className="w-6 h-6" />
+                  </div>
+                )}
+                <div className="truncate">
+                  <p className="text-xs font-semibold text-slate-200 truncate">{selectedFile.name}</p>
+                  <p className="text-[11px] text-slate-400 font-mono">
+                    {(selectedFile.size / 1024).toFixed(1)} KB &bull; {selectedFile.type || 'image'}
+                  </p>
                 </div>
               </div>
 
-              <button
-                onClick={handleUploadAndScan}
-                disabled={uploading}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-semibold text-xs shadow-lg shadow-emerald-500/25 flex items-center space-x-2 transition-all disabled:opacity-50"
-              >
-                {uploading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>
-                      {scanStage === 'uploading' && 'Saving to Private Vault...'}
-                      {scanStage === 'scanning' && 'Running OCR & Detecting PII...'}
-                      {scanStage === 'masking' && 'Generating Masked Copy...'}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span>Upload & Privacy Scan</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
+              <div className="flex items-center space-x-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => { setSelectedFile(null); setPreviewUrl(null); }}
+                  disabled={uploading}
+                  className="p-2 text-slate-400 hover:text-white rounded-lg"
+                  title="Remove"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleUploadAndScan}
+                  disabled={uploading}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-semibold text-xs shadow-lg shadow-indigo-500/25 flex items-center space-x-2 transition-all disabled:opacity-50"
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>
+                        {scanStep === 'uploading' && 'Encrypting & Storing...'}
+                        {scanStep === 'scanning' && 'Running OCR & PII Detection...'}
+                        {scanStep === 'completed' && 'Finalizing...'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Upload & Privacy Scan</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
+
+          {/* Progress bar during scan */}
+          {uploading && (
+            <div className="space-y-2 pt-2">
+              <div className="flex justify-between text-xs text-slate-400 font-mono">
+                <span>{scanStep === 'uploading' ? 'Vault Upload' : 'Tesseract OCR & Masking'}</span>
+                <span>{progress}%</span>
+              </div>
+              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
         </div>
       ) : (
-        /* Results Card */
-        <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-            <div>
-              <div className="flex items-center space-x-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-                <h2 className="text-lg font-bold text-white">Privacy Scan Complete</h2>
+        /* Scan Completed Summary Card */
+        <div className="glass-panel rounded-3xl p-8 border border-cosmic-border shadow-2xl space-y-6">
+          <div className="flex items-center justify-between pb-5 border-b border-cosmic-border">
+            <div className="flex items-center space-x-3">
+              <div className="p-2.5 bg-emerald-500/15 rounded-xl border border-emerald-500/30 text-emerald-400">
+                <CheckCircle2 className="w-6 h-6" />
               </div>
-              <p className="text-xs text-slate-400 mt-0.5">{result.file.filename}</p>
+              <div>
+                <h2 className="text-base font-bold text-white tracking-tight">Privacy Scan Complete</h2>
+                <p className="text-xs text-slate-400">{scanResult.file.filename}</p>
+              </div>
             </div>
-            <RiskBadge level={result.scan.risk_level} score={result.scan.risk_score} />
+            <RiskBadge level={scanResult.scan.risk_level} size="lg" />
           </div>
 
-          {/* Detection Breakdown Grid */}
+          {/* Reason Box */}
+          <div className="p-4 bg-cosmic-950/80 rounded-2xl border border-cosmic-border text-xs text-slate-300">
+            <span className="font-semibold text-indigo-400">Classification Assessment: </span>
+            {scanResult.scan.risk_reason}
+          </div>
+
+          {/* Categories Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800">
+            <div className="p-4 bg-cosmic-950/60 rounded-xl border border-cosmic-border">
               <span className="text-[11px] text-slate-400 block">Aadhaar Numbers</span>
-              <span className="text-lg font-bold text-rose-400">{result.scan.counts.aadhaar}</span>
-              <span className="text-[10px] text-slate-500 block mt-0.5">40 pts weight each</span>
+              <span className="text-xl font-bold text-rose-400 font-mono">{scanResult.scan.counts?.aadhaar || 0}</span>
+              <span className="text-[10px] text-slate-500 block mt-0.5">Priority: HIGH (5m)</span>
             </div>
-            <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800">
+            <div className="p-4 bg-cosmic-950/60 rounded-xl border border-cosmic-border">
               <span className="text-[11px] text-slate-400 block">PAN Cards</span>
-              <span className="text-lg font-bold text-amber-400">{result.scan.counts.pan}</span>
-              <span className="text-[10px] text-slate-500 block mt-0.5">30 pts weight each</span>
+              <span className="text-xl font-bold text-amber-400 font-mono">{scanResult.scan.counts?.pan || 0}</span>
+              <span className="text-[10px] text-slate-500 block mt-0.5">Priority: HIGH (5m)</span>
             </div>
-            <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800">
+            <div className="p-4 bg-cosmic-950/60 rounded-xl border border-cosmic-border">
               <span className="text-[11px] text-slate-400 block">Phone Numbers</span>
-              <span className="text-lg font-bold text-blue-400">{result.scan.counts.phone}</span>
-              <span className="text-[10px] text-slate-500 block mt-0.5">10 pts weight each</span>
+              <span className="text-xl font-bold text-blue-400 font-mono">{scanResult.scan.counts?.phone || 0}</span>
+              <span className="text-[10px] text-slate-500 block mt-0.5">Priority: MEDIUM (10m)</span>
             </div>
-            <div className="p-3.5 bg-slate-950 rounded-xl border border-slate-800">
+            <div className="p-4 bg-cosmic-950/60 rounded-xl border border-cosmic-border">
               <span className="text-[11px] text-slate-400 block">Email Addresses</span>
-              <span className="text-lg font-bold text-purple-400">{result.scan.counts.email}</span>
-              <span className="text-[10px] text-slate-500 block mt-0.5">10 pts weight each</span>
+              <span className="text-xl font-bold text-purple-400 font-mono">{scanResult.scan.counts?.email || 0}</span>
+              <span className="text-[10px] text-slate-500 block mt-0.5">Priority: LOW (15m)</span>
             </div>
           </div>
 
           {/* Action Row */}
-          <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs">
-            <div className="flex items-center space-x-2 text-emerald-300">
-              <Shield className="w-5 h-5 shrink-0" />
-              <span>
-                Opaque masked copy generated. The private original is secured and will not be shared.
-              </span>
-            </div>
-            <div className="flex items-center space-x-2 shrink-0">
-              {result.scan.has_masked_copy && (
-                <button
-                  onClick={() => setShowPreviewModal(true)}
-                  className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg transition-colors font-medium flex items-center space-x-1"
-                >
-                  <Eye className="w-3.5 h-3.5" />
-                  <span>Preview Mask</span>
-                </button>
-              )}
+          <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <button
+              onClick={() => { setSelectedFile(null); setScanResult(null); }}
+              className="text-xs text-slate-400 hover:text-white font-medium"
+            >
+              &larr; Upload another image
+            </button>
+
+            <div className="flex items-center space-x-3">
               <button
-                onClick={() => setShowShareModal(true)}
-                className="px-3.5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors font-semibold flex items-center space-x-1 shadow-lg shadow-emerald-500/20"
+                onClick={() => navigate(`/privacy-analysis?file=${scanResult.file.id}`)}
+                className="px-4 py-2.5 rounded-xl bg-cosmic-800 hover:bg-cosmic-700 text-slate-200 text-xs font-semibold border border-cosmic-border flex items-center space-x-1.5 transition-all"
               >
-                <Share2 className="w-3.5 h-3.5" />
-                <span>Create Share Link</span>
+                <ScanEye className="w-4 h-4 text-indigo-400" />
+                <span>Open Privacy Analysis</span>
+              </button>
+
+              <button
+                onClick={() => navigate(`/shares?file=${scanResult.file.id}`)}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-semibold text-xs shadow-lg shadow-indigo-500/25 flex items-center space-x-1.5 transition-all"
+              >
+                <span>Share Securely</span>
+                <ArrowRight className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Upload another button */}
-          <div className="text-center pt-2">
-            <button
-              onClick={() => {
-                setFile(null);
-                setResult(null);
-              }}
-              className="text-xs text-slate-400 hover:text-white font-medium"
-            >
-              &larr; Upload another document
-            </button>
-          </div>
         </div>
-      )}
-
-      {showShareModal && result?.file && (
-        <ShareModal
-          file={result.file}
-          onClose={() => setShowShareModal(false)}
-        />
-      )}
-
-      {showPreviewModal && result?.file && (
-        <MaskedPreviewModal
-          file={result.file}
-          onClose={() => setShowPreviewModal(false)}
-        />
       )}
 
     </div>

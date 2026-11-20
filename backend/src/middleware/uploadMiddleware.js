@@ -1,26 +1,32 @@
 import multer from 'multer';
 
-// Store files in memory buffer so they can be processed and pushed directly to Supabase Storage
+// In-memory buffer storage
 const storage = multer.memoryStorage();
 
-// Allowed file types: Images (JPG, PNG, WEBP) and PDF
+// Supported image types ONLY: JPG, JPEG, PNG
 const allowedMimeTypes = [
   'image/jpeg',
-  'image/png',
-  'image/webp',
-  'application/pdf'
+  'image/jpg',
+  'image/png'
 ];
 
 export const upload = multer({
   storage,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5 MB maximum file size limit
+    fileSize: 5 * 1024 * 1024 // 5 MB maximum individual file limit
   },
   fileFilter: (req, file, cb) => {
-    if (allowedMimeTypes.includes(file.mimetype)) {
+    const isAllowedMime = allowedMimeTypes.includes(file.mimetype.toLowerCase());
+    const isAllowedExt = /\.(jpe?g|png)$/i.test(file.originalname);
+
+    if (isAllowedMime && isAllowedExt) {
       cb(null, true);
     } else {
-      cb(new Error(`Invalid file type: ${file.mimetype}. Only JPEG, PNG, WEBP, and PDF files are permitted.`), false);
+      const err = new Error(
+        `Invalid file format: ${file.originalname}. PRIVACLOUD AI strictly accepts JPG, JPEG, and PNG images only (PDF is not permitted).`
+      );
+      err.code = 'INVALID_FILE_TYPE';
+      cb(err, false);
     }
   }
 });

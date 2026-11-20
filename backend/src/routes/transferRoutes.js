@@ -1,11 +1,12 @@
 import express from 'express';
-import { getTransferInfo, downloadMaskedFile, viewMaskedFile } from '../controllers/transferController.js';
+import { getTransferInfo, requestOtp, verifyOtp, downloadMaskedFile } from '../controllers/transferController.js';
 
 const router = express.Router();
 
-// Public routes (NO AUTHENTICATION REQUIRED)
+// Publicly accessible with server-side validation
 router.get('/:token', getTransferInfo);
-router.get('/:token/download', downloadMaskedFile);
-router.get('/:token/view', viewMaskedFile);
+router.post('/:token/request-otp', requestOtp);
+router.post('/:token/verify-otp', verifyOtp);
+router.post('/:token/download', downloadMaskedFile);
 
 export default router;

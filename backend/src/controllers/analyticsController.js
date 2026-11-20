@@ -1,73 +1,62 @@
-import { isConfigured, supabase, localStore } from '../config/supabase.js';
+import { isConfigured, supabase, localStore, USER_QUOTA_BYTES } from '../config/supabase.js';
 
 /**
- * Privacy Analytics Controller
- * Computes aggregated metadata ONLY.
- * NEVER stores or returns raw detected PII values.
+ * Security Activity & Analytics Controller
+ * Provides audit event timeline and dashboard KPI metrics.
  */
-export async function getAnalytics(req, res) {
+export async function getAnalyticsSummary(req, res) {
   try {
     const userId = req.user.id;
+    const { event_type, event_status, limit = 50 } = req.query;
 
     let files = [];
-    let scans = [];
     let shares = [];
-    let shareEvents = [];
+    let securityEvents = [];
+    let usedBytes = 0;
 
     if (isConfigured && supabase) {
-      // 1. Files & Scans
-      const { data: fileData } = await supabase
-        .from('files')
-        .select('id, created_at')
-        .eq('user_id', userId);
+      // Fetch user files
+      const { data: fileData } = await supabase.from('files').select('*').eq('user_id', userId);
       files = fileData || [];
+      usedBytes = files.reduce((acc, f) => acc + (f.size_bytes || 0), 0);
 
+      // Fetch user shares
       const fileIds = files.map(f => f.id);
-
       if (fileIds.length > 0) {
-        const { data: scanData } = await supabase
-          .from('scans')
-          .select('risk_score, risk_level, count_aadhaar, count_pan, count_phone, count_email, scanned_at')
-          .in('file_id', fileIds);
-        scans = scanData || [];
-
-        const { data: shareData } = await supabase
-          .from('shares')
-          .select('id, file_id, expires_at, created_at')
-          .in('file_id', fileIds);
+        const { data: shareData } = await supabase.from('shares').select('*').in('file_id', fileIds);
         shares = shareData || [];
-
-        const shareIds = shares.map(s => s.id);
-        if (shareIds.length > 0) {
-          const { data: eventData } = await supabase
-            .from('share_events')
-            .select('event_type, event_time')
-            .in('share_id', shareIds);
-          shareEvents = eventData || [];
-        }
       }
+
+      // Fetch security audit events
+      let query = supabase.from('security_events').select('*').order('created_at', { ascending: false }).limit(limit);
+      if (event_type) query = query.eq('event_type', event_type);
+      if (event_status) query = query.eq('event_status', event_status);
+
+      const { data: eventData } = await query;
+      securityEvents = eventData || [];
     } else {
       files = await localStore.getFilesByUser(userId);
-      for (const f of files) {
-        const scan = await localStore.getScanByFileId(f.id);
-        if (scan) scans.push(scan);
-      }
+      usedBytes = await localStore.getUserStorageUsed(userId);
+
       const allShares = await localStore.getAllShares();
       const fileIdSet = new Set(files.map(f => f.id));
       shares = allShares.filter(s => fileIdSet.has(s.file_id));
-      const shareIdSet = new Set(shares.map(s => s.id));
-      const allEvents = await localStore.getShareEvents();
-      shareEvents = allEvents.filter(e => shareIdSet.has(e.share_id));
+
+      securityEvents = await localStore.getSecurityEvents({
+        eventType: event_type,
+        eventStatus: event_status
+      });
     }
 
-    // Aggregate Risk Levels
-    const riskDistribution = {
-      Low: 0,
-      Medium: 0,
-      High: 0
+    // Risk distribution
+    const riskCounts = {
+      HIGH: files.filter(f => f.risk_level === 'HIGH').length,
+      MEDIUM: files.filter(f => f.risk_level === 'MEDIUM').length,
+      LOW: files.filter(f => f.risk_level === 'LOW').length,
+      NONE: files.filter(f => f.risk_level === 'NONE').length,
     };
 
-    // Aggregate Detected PII Counts
+    // Detected PII Category Aggregates
     const piiCounts = {
       aadhaar: 0,
       pan: 0,
@@ -75,62 +64,42 @@ export async function getAnalytics(req, res) {
       email: 0
     };
 
-    let totalRiskScoreSum = 0;
-    for (const s of scans) {
-      if (s.risk_level) riskDistribution[s.risk_level] = (riskDistribution[s.risk_level] || 0) + 1;
-      piiCounts.aadhaar += s.count_aadhaar || 0;
-      piiCounts.pan += s.count_pan || 0;
-      piiCounts.phone += s.count_phone || 0;
-      piiCounts.email += s.count_email || 0;
-      totalRiskScoreSum += s.risk_score || 0;
+    for (const f of files) {
+      const d = f.detected_info || {};
+      piiCounts.aadhaar += d.aadhaar || 0;
+      piiCounts.pan += d.pan || 0;
+      piiCounts.phone += d.phone || 0;
+      piiCounts.email += d.email || 0;
     }
 
-    const averageRiskScore = scans.length > 0 ? Math.round(totalRiskScoreSum / scans.length) : 0;
-
-    // Aggregate Share Link Status
+    // Share link states
     const now = new Date();
-    let activeShares = 0;
-    let expiredShares = 0;
-
-    for (const sh of shares) {
-      if (new Date(sh.expires_at) > now) {
-        activeShares++;
-      } else {
-        expiredShares++;
-      }
-    }
-
-    // Aggregate Events
-    let totalViews = 0;
-    let totalDownloads = 0;
-    let totalExpiredAttempts = 0;
-
-    for (const ev of shareEvents) {
-      if (ev.event_type === 'VIEW') totalViews++;
-      else if (ev.event_type === 'DOWNLOAD') totalDownloads++;
-      else if (ev.event_type === 'EXPIRED_ATTEMPT') totalExpiredAttempts++;
-    }
+    const shareStats = {
+      total: shares.length,
+      active: shares.filter(s => s.status !== 'USED' && s.status !== 'REVOKED' && new Date(s.expires_at) > now).length,
+      used: shares.filter(s => s.status === 'USED').length,
+      revoked: shares.filter(s => s.status === 'REVOKED').length,
+      expired: shares.filter(s => new Date(s.expires_at) <= now && s.status !== 'USED' && s.status !== 'REVOKED').length,
+    };
 
     return res.json({
       success: true,
-      analytics: {
+      summary: {
         total_files: files.length,
-        total_scans: scans.length,
-        average_risk_score: averageRiskScore,
-        risk_distribution: riskDistribution,
+        storage: {
+          used_bytes: usedBytes,
+          total_bytes: USER_QUOTA_BYTES,
+          remaining_bytes: Math.max(0, USER_QUOTA_BYTES - usedBytes),
+          percent_used: Math.min(100, Math.round((usedBytes / USER_QUOTA_BYTES) * 100))
+        },
+        risk_distribution: riskCounts,
         pii_counts: piiCounts,
-        shares: {
-          total_links: shares.length,
-          active_links: activeShares,
-          expired_links: expiredShares,
-          total_views: totalViews,
-          total_downloads: totalDownloads,
-          expired_attempts: totalExpiredAttempts
-        }
+        shares: shareStats,
+        security_events: securityEvents
       }
     });
   } catch (err) {
-    console.error('Analytics error:', err);
+    console.error('Analytics summary error:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 }

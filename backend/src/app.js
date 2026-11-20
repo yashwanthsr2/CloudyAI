@@ -9,6 +9,9 @@ import scanRoutes from './routes/scanRoutes.js';
 import shareRoutes from './routes/shareRoutes.js';
 import transferRoutes from './routes/transferRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
+import { uploadFile } from './controllers/fileController.js';
+import { upload } from './middleware/uploadMiddleware.js';
+import { requireAuth } from './middleware/authMiddleware.js';
 
 dotenv.config();
 
@@ -16,7 +19,7 @@ const app = express();
 
 // Security Headers
 app.use(helmet({
-  crossOriginResourcePolicy: false // Allow loading masked images across origins
+  crossOriginResourcePolicy: false // Allow masked preview images to load across origins
 }));
 
 // CORS configuration
@@ -29,7 +32,6 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow non-browser requests or allowed frontend origins
     if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
       callback(null, true);
     } else {
@@ -41,10 +43,10 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'x-demo-user-id']
 }));
 
-// Rate Limiting (Protects API from scanning abuse)
+// Rate Limiting
 const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 200, // limit each IP to 200 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Too many requests. Please try again later.' }
@@ -59,15 +61,19 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
-    service: 'PRIVACLOUD AI Backend',
+    service: 'PRIVACLOUD AI Enterprise Backend',
     timestamp: new Date().toISOString()
   });
 });
+
+// Direct alias for POST /api/upload as per Section 9 API contract
+app.post('/api/upload', requireAuth, upload.single('file'), uploadFile);
 
 // API Routes
 app.use('/api/files', fileRoutes);
 app.use('/api/scan', scanRoutes);
 app.use('/api/share', shareRoutes);
+app.use('/api/shares', shareRoutes);
 app.use('/api/transfer', transferRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
@@ -76,13 +82,14 @@ app.use((req, res) => {
   res.status(404).json({ success: false, error: `Endpoint ${req.originalUrl} not found.` });
 });
 
-// Global Error Handler
+// Central Error Handler
 app.use((err, req, res, next) => {
-  console.error('Unhandled server error:', err);
+  console.error('Server error:', err);
   const status = err.status || 500;
   res.status(status).json({
     success: false,
-    error: err.message || 'Internal server error'
+    error: err.message || 'Internal server error',
+    code: err.code
   });
 });
 

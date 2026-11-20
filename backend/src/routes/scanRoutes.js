@@ -1,12 +1,13 @@
 import express from 'express';
-import { scanFile, getMaskedPreview } from '../controllers/scanController.js';
+import { scanFile, getMaskedPreview, getOriginalPreview } from '../controllers/scanController.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.use(requireAuth);
 
-router.post('/:file_id', scanFile);
-router.get('/:file_id/preview', getMaskedPreview);
+router.post('/:id', scanFile);
+router.get('/:id/masked', getMaskedPreview);
+router.get('/:id/original', getOriginalPreview);
 
 export default router;

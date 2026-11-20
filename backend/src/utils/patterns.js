@@ -1,79 +1,89 @@
 import crypto from 'crypto';
 
 /**
- * PII Detection Patterns & Risk Scoring Constants
- * PRIVACLOUD AI Specification - Enhanced for real-world Aadhaar & Indian identity documents
+ * PII Detection Patterns & Strict Risk Priority Classification
+ * PRIVACLOUD AI Specification
  */
 export const PII_PATTERNS = {
-  // Aadhaar:
-  // 1. 12 digits formatted as 4-4-4 with spaces, hyphens, dots, or slashes (e.g. 1234 5678 9012)
-  // 2. 12 contiguous digits (e.g. 123456789012)
-  // 3. Masked Aadhaar: XXXX XXXX 1234 or **** **** 1234 or •••• •••• 1234
-  // 4. Any 12 digits starting with any digit (0-9)
+  // Aadhaar: 12 digits, grouped 4-4-4 or contiguous, or masked XXXX XXXX 1234
   aadhaar: /(?:\b\d{4}[\s\-\.\/]{1,3}\d{4}[\s\-\.\/]{1,3}\d{4}\b|\b\d{12}\b|\b[xX\*•]{4}[\s\-\.\/]?[xX\*•]{4}[\s\-\.\/]?\d{4}\b)/g,
   
-  // PAN: 5 letters, 4 digits, 1 letter (e.g. ABCDE1234F) - case insensitive
+  // PAN: 5 uppercase letters, 4 digits, 1 uppercase letter (e.g. ABCDE1234F)
   pan: /\b[A-Za-z]{5}[0-9]{4}[A-Za-z]\b/g,
   
-  // Phone: Indian mobile numbers (10 digits starting with 6-9, optionally with +91 or 0, with or without spaces/hyphens)
+  // Phone: Indian mobile numbers (10 digits starting with 6-9, with or without +91 or 0)
   phone: /(?:\+?91[\s\-]?)?[6-9]\d{4}[\s\-]?\d{5}\b|(?:\+?91[\s\-]?)?[6-9]\d{9}\b/g,
   
-  // Email: Standard email pattern
+  // Email: Standard RFC email format
   email: /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g,
 };
 
-export const RISK_WEIGHTS = {
-  aadhaar: 40,
-  pan: 30,
-  phone: 10,
-  email: 10,
-};
-
-export const RISK_THRESHOLDS = {
-  HIGH_MIN: 50,
-  MEDIUM_MIN: 20,
-};
-
 export const RISK_TTL_MINUTES = {
-  High: 5,    // High risk files expire in 5 minutes
-  Medium: 10, // Medium risk files expire in 10 minutes
-  Low: 15,    // Low risk files expire in 15 minutes
+  HIGH: 5,    // 5 minutes strictly enforced
+  MEDIUM: 10, // 10 minutes
+  LOW: 15,    // 15 minutes
+  NONE: 15,   // Safe sharing default
 };
 
 /**
- * Calculates risk score and classifies into Low/Medium/High
- * Score is capped at 100.
+ * Exact Risk Priority Classification:
+ * - Aadhaar or PAN -> HIGH (5 min TTL)
+ * - Phone (without Aadhaar or PAN) -> MEDIUM (10 min TTL)
+ * - Email only -> LOW (15 min TTL)
+ * - None detected -> NONE
  */
 export function calculateRisk(counts) {
-  const rawScore = 
-    (counts.aadhaar || 0) * RISK_WEIGHTS.aadhaar +
-    (counts.pan || 0) * RISK_WEIGHTS.pan +
-    (counts.phone || 0) * RISK_WEIGHTS.phone +
-    (counts.email || 0) * RISK_WEIGHTS.email;
+  const hasAadhaar = (counts.aadhaar || 0) > 0;
+  const hasPan = (counts.pan || 0) > 0;
+  const hasPhone = (counts.phone || 0) > 0;
+  const hasEmail = (counts.email || 0) > 0;
 
-  const riskScore = Math.min(100, Math.max(0, rawScore));
-
-  let riskLevel = 'Low';
-  if (riskScore >= RISK_THRESHOLDS.HIGH_MIN) {
-    riskLevel = 'High';
-  } else if (riskScore >= RISK_THRESHOLDS.MEDIUM_MIN) {
-    riskLevel = 'Medium';
+  if (hasAadhaar || hasPan) {
+    const reasons = [];
+    if (hasAadhaar) reasons.push(`${counts.aadhaar} Aadhaar number(s)`);
+    if (hasPan) reasons.push(`${counts.pan} PAN card identifier(s)`);
+    return {
+      riskLevel: 'HIGH',
+      riskReason: `Critical Government ID detected: ${reasons.join(', ')}. Maximum 5-minute link expiration enforced.`,
+      ttlMinutes: 5
+    };
   }
 
-  return { riskScore, riskLevel };
+  if (hasPhone) {
+    return {
+      riskLevel: 'MEDIUM',
+      riskReason: `Direct contact PII detected: ${counts.phone} mobile phone number(s). 10-minute link expiration enforced.`,
+      ttlMinutes: 10
+    };
+  }
+
+  if (hasEmail) {
+    return {
+      riskLevel: 'LOW',
+      riskReason: `Low-impact contact info detected: ${counts.email} email address(es). 15-minute link expiration enforced.`,
+      ttlMinutes: 15
+    };
+  }
+
+  return {
+    riskLevel: 'NONE',
+    riskReason: 'No sensitive personal identity elements detected. Ready for controlled one-time sharing.',
+    ttlMinutes: 15
+  };
 }
 
 /**
  * Computes TTL in minutes and exact expiration Date based on risk level
  */
 export function calculateExpiry(riskLevel) {
-  const ttlMinutes = RISK_TTL_MINUTES[riskLevel] || 15;
+  const normalizedLevel = (riskLevel || 'LOW').toUpperCase();
+  const ttlMinutes = RISK_TTL_MINUTES[normalizedLevel] || 15;
   const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
   return { ttlMinutes, expiresAt };
 }
 
 /**
- * Generates a cryptographically secure 256-bit random token
+ * Generates a cryptographically secure 256-bit random share token
  */
 export function generateShareToken() {
   return crypto.randomBytes(32).toString('hex');
@@ -84,4 +94,18 @@ export function generateShareToken() {
  */
 export function hashToken(token) {
   return crypto.createHash('sha256').update(token.trim()).digest('hex');
+}
+
+/**
+ * Generates a 6-digit cryptographically random OTP
+ */
+export function generateOTP() {
+  return crypto.randomInt(100000, 999999).toString();
+}
+
+/**
+ * SHA-256 hashes an OTP with optional salt
+ */
+export function hashOTP(otp, salt = 'privacloud-otp-salt') {
+  return crypto.createHash('sha256').update(`${otp}:${salt}`).digest('hex');
 }

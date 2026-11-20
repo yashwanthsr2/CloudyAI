@@ -4,40 +4,66 @@
 
 @layer base {
   body {
-    @apply bg-slate-950 text-slate-100 font-sans antialiased;
-    background-image: 
-      radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.05) 0px, transparent 50%),
-      radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.05) 0px, transparent 50%);
-    background-attachment: fixed;
+    @apply bg-cosmic-950 text-slate-100 font-sans antialiased selection:bg-indigo-500/30 selection:text-indigo-300;
+    background-color: #060911;
   }
+}
+
+/* Glassmorphism Card Utility */
+.glass-panel {
+  background: rgba(15, 21, 38, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.glass-panel-hover {
+  transition: all 0.2s ease-in-out;
+}
+.glass-panel-hover:hover {
+  background: rgba(20, 28, 51, 0.85);
+  border-color: rgba(99, 102, 241, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.5);
 }
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: #0a0e1a;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 4px;
+  background: #1e294b;
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #312e81;
 }
 
-/* Pulse animation for scanner */
-@keyframes scan-line {
-  0% { transform: translateY(0%); }
-  50% { transform: translateY(100%); }
-  100% { transform: translateY(0%); }
+/* Radar Scan Line Animation */
+@keyframes radar-scan {
+  0% { top: 0%; opacity: 0.8; }
+  50% { top: 100%; opacity: 0.8; }
+  100% { top: 0%; opacity: 0.8; }
 }
 
-.animate-scan-line {
-  animation: scan-line 2.5s ease-in-out infinite;
+.animate-radar-scan {
+  animation: radar-scan 3s ease-in-out infinite;
+}
+
+/* Cosmic particle canvas container */
+.cosmic-stars {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
 }
