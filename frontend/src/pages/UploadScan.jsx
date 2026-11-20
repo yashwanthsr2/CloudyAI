@@ -36,6 +36,7 @@ export default function UploadScan({ onUploadComplete, quota, files = [] }) {
   const navigate = useNavigate();
 
   const totalStoredBytes = quota?.used_bytes !== undefined ? quota.used_bytes : files.reduce((acc, f) => acc + (f.size_bytes || 0), 0);
+  const usedBytes = totalStoredBytes;
   const maxBytes = 100 * 1024 * 1024;
   const usedFormatted = totalStoredBytes < 1024 * 1024 
     ? `${(totalStoredBytes / 1024).toFixed(1)} KB` 
@@ -238,6 +239,7 @@ export default function UploadScan({ onUploadComplete, quota, files = [] }) {
                 type="file"
                 id="file-upload-input"
                 accept="image/jpeg,image/png,image/jpg"
+                onClick={(e) => { e.target.value = null; }}
                 onChange={(e) => e.target.files && e.target.files[0] && validateAndSelectFile(e.target.files[0])}
                 className="hidden"
               />

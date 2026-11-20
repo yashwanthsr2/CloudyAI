@@ -9,5 +9,7 @@ router.use(requireAuth);
 router.post('/:id', scanFile);
 router.get('/:id/masked', getMaskedPreview);
 router.get('/:id/original', getOriginalPreview);
+router.get('/:id/masked-preview', getMaskedPreview);
+router.get('/:id/original-preview', getOriginalPreview);
 
 export default router;
