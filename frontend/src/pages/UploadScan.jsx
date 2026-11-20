@@ -638,16 +638,7 @@ export default function UploadScan({ onUploadComplete, quota, files = [] }) {
                 </div>
               </div>
 
-              {/* Redaction Guarantee */}
-              <div className="p-3.5 bg-gradient-to-r from-violet-950/40 to-cyan-950/40 rounded-xl border border-violet-500/20 text-xs space-y-1">
-                <span className="font-semibold text-cyan-300 flex items-center space-x-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
-                  <span>Pixel-Level Permanent Redaction</span>
-                </span>
-                <p className="text-[11px] text-slate-300 leading-relaxed">
-                  Sharp composites solid black SVG rectangles (#000000) with +4px boundary padding. Pixel bytes are permanently overwritten with [0, 0, 0, 255] — no CSS blur or reversible overlays.
-                </p>
-              </div>
+
 
             </div>
           )}
