@@ -189,9 +189,23 @@ export default function TransferPage() {
     try {
       setLoading(true);
       setError(null);
-      await api.downloadMaskedFile(token, email);
-      setStep('expired_or_used');
-      setError('HTTP 410 Gone: Download completed. This one-time link has now been permanently destroyed.');
+      const blob = await api.downloadMaskedFile(token, email);
+
+      // Trigger automatic browser file download
+      const targetName = shareInfo?.filename 
+        ? `masked-${shareInfo.filename.replace(/\.[^/.]+$/, '')}.png` 
+        : 'masked-document.png';
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = targetName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1000);
+
+      // Transition to clean download success state
+      setStep('download_success');
     } catch (err) {
       setError(err.message || 'Download failed or share expired.');
     } finally {
@@ -409,7 +423,35 @@ export default function TransferPage() {
           </div>
         )}
 
-        {/* State 4: Expired or Used */}
+        {/* State 4: Download Completed Successfully */}
+        {step === 'download_success' && (
+          <div className="text-center space-y-5 py-4">
+            <div className="w-16 h-16 mx-auto rounded-3xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-emerald-glow">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h2 className="text-lg font-bold text-white tracking-tight">Download Completed Successfully</h2>
+              <p className="text-xs text-slate-300 max-w-sm mx-auto">
+                Your protected, redacted document has been saved to your downloads folder.
+              </p>
+            </div>
+
+            <div className="p-4 bg-cosmic-950/80 rounded-2xl border border-cosmic-border text-left text-xs space-y-1.5">
+              <p className="font-semibold text-emerald-400 flex items-center space-x-1.5">
+                <Shield className="w-4 h-4" />
+                <span>Zero-Trust One-Time Protocol Enforced</span>
+              </p>
+              <p className="text-[11px] text-slate-400 leading-relaxed">
+                In strict accordance with ephemeral privacy policy, this single-use link has now been permanently consumed and destroyed (<code className="text-slate-300">HTTP 410 Gone</code>). It cannot be downloaded again or forwarded.
+              </p>
+            </div>
+
+            <p className="text-[10px] font-mono text-slate-500">SESSION TERMINATED • ZERO PLAINTEXT RETAINED</p>
+          </div>
+        )}
+
+        {/* State 5: Expired or Used */}
         {step === 'expired_or_used' && (
           <div className="text-center space-y-4 py-4">
             <div className="w-16 h-16 mx-auto rounded-3xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
