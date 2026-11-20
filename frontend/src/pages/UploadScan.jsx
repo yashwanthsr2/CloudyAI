@@ -568,7 +568,7 @@ export default function UploadScan({ onUploadComplete, quota }) {
                   <span>Pixel-Level Permanent Redaction</span>
                 </span>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  Sharp composites solid black SVG rectangles ($#000000$) with $+4\text{px}$ boundary padding. Pixel bytes are permanently overwritten with $[0, 0, 0, 255]$ — no CSS blur or reversible overlays.
+                  Sharp composites solid black SVG rectangles (#000000) with +4px boundary padding. Pixel bytes are permanently overwritten with [0, 0, 0, 255] — no CSS blur or reversible overlays.
                 </p>
               </div>
 
