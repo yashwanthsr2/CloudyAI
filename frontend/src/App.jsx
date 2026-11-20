@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useOutletContext } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -14,40 +14,19 @@ import Analytics from './pages/Analytics';
 import TransferPage from './pages/TransferPage';
 import { api } from './services/api';
 
-function AppLayout({ children, files, quota, onRefresh, searchQuery, onSearch }) {
-  return (
-    <div className="min-h-screen flex bg-cosmic-950 text-slate-100 antialiased selection:bg-violet-600/30 selection:text-violet-200">
-      {/* Reference 2 Left Navigation Sidebar */}
-      <Sidebar quota={quota} />
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <Header searchQuery={searchQuery} onSearch={onSearch} />
-        <main className="flex-1 overflow-y-auto">
-          {children}
-        </main>
-      </div>
-    </div>
-  );
-}
-
-function AuthenticatedApp() {
+function ProtectedLayout() {
   const { user, loading } = useAuth();
   const [files, setFiles] = useState([]);
   const [quota, setQuota] = useState(null);
-  const [loadingFiles, setLoadingFiles] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const refreshFiles = async () => {
     try {
-      setLoadingFiles(true);
       const res = await api.listFiles();
       setFiles(res.files || []);
       setQuota(res.quota || null);
     } catch (err) {
       console.error('Failed to load files:', err);
-    } finally {
-      setLoadingFiles(false);
     }
   };
 
@@ -73,40 +52,50 @@ function AuthenticatedApp() {
   }
 
   return (
-    <AppLayout
-      files={files}
-      quota={quota}
-      onRefresh={refreshFiles}
-      searchQuery={searchQuery}
-      onSearch={setSearchQuery}
-    >
-      <Routes>
-        {/* Reference 2: Main Cloud Dashboard */}
-        <Route path="/" element={<Dashboard files={files} quota={quota} onRefresh={refreshFiles} />} />
+    <div className="min-h-screen flex bg-cosmic-950 text-slate-100 antialiased selection:bg-violet-600/30 selection:text-violet-200">
+      {/* Reference 2 Left Navigation Sidebar */}
+      <Sidebar quota={quota} />
 
-        {/* Reference 2: My Files Drive View */}
-        <Route path="/files" element={<MyFiles files={files} onRefresh={refreshFiles} />} />
-
-        {/* Reference 3: Drag-and-Drop Upload & Real-Time Scan */}
-        <Route path="/upload" element={<UploadScan onUploadComplete={refreshFiles} quota={quota} />} />
-
-        {/* Reference 4: DLP Privacy Analysis & Visual Redaction Comparison */}
-        <Route path="/privacy-analysis" element={<PrivacyAnalysis files={files} />} />
-
-        {/* Reference 5: Secure Sharing Management */}
-        <Route path="/shares" element={<SecureSharing files={files} />} />
-
-        {/* Reference 6: Security Activity Audit Log Stream */}
-        <Route path="/activity" element={<SecurityActivity />} />
-
-        {/* Supplementary Analytics View */}
-        <Route path="/analytics" element={<Analytics files={files} quota={quota} />} />
-
-        {/* Catch-all */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AppLayout>
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        <Header searchQuery={searchQuery} onSearch={setSearchQuery} />
+        <main className="flex-1 overflow-y-auto">
+          <Outlet context={{ files, quota, refreshFiles, searchQuery }} />
+        </main>
+      </div>
+    </div>
   );
+}
+
+// Route Outlet Wrappers
+function DashboardView() {
+  const { files, quota, refreshFiles } = useOutletContext();
+  return <Dashboard files={files} quota={quota} onRefresh={refreshFiles} />;
+}
+
+function MyFilesView() {
+  const { files, refreshFiles } = useOutletContext();
+  return <MyFiles files={files} onRefresh={refreshFiles} />;
+}
+
+function UploadScanView() {
+  const { refreshFiles, quota } = useOutletContext();
+  return <UploadScan onUploadComplete={refreshFiles} quota={quota} />;
+}
+
+function PrivacyAnalysisView() {
+  const { files } = useOutletContext();
+  return <PrivacyAnalysis files={files} />;
+}
+
+function SecureSharingView() {
+  const { files } = useOutletContext();
+  return <SecureSharing files={files} />;
+}
+
+function AnalyticsView() {
+  const { files, quota } = useOutletContext();
+  return <Analytics files={files} quota={quota} />;
 }
 
 export default function App() {
@@ -118,11 +107,22 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Login />} />
 
-          {/* Reference 1 & 5: Public Recipient Transfer Portal (Zero Auth Required, 6-digit OTP verification) */}
+          {/* Reference 1 & 5: Public Recipient Transfer Portal */}
           <Route path="/transfer/:token" element={<TransferPage />} />
 
-          {/* Authenticated Vault Routes */}
-          <Route path="/*" element={<AuthenticatedApp />} />
+          {/* Authenticated Vault Routes using Single Canonical Tree */}
+          <Route element={<ProtectedLayout />}>
+            <Route path="/" element={<DashboardView />} />
+            <Route path="/files" element={<MyFilesView />} />
+            <Route path="/upload" element={<UploadScanView />} />
+            <Route path="/privacy-analysis" element={<PrivacyAnalysisView />} />
+            <Route path="/shares" element={<SecureSharingView />} />
+            <Route path="/activity" element={<SecurityActivity />} />
+            <Route path="/analytics" element={<AnalyticsView />} />
+          </Route>
+
+          {/* Catch-all */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
     </AuthProvider>

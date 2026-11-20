@@ -86,25 +86,19 @@ export default function Sidebar({ quota }) {
                     : 'text-slate-400 hover:text-slate-200 hover:bg-cosmic-800/60 border border-transparent'}
                 `}
               >
-                {({ isActive }) => (
-                  <>
-                    <div className="flex items-center space-x-3">
-                      <Icon className={`w-4 h-4 transition-colors duration-200 ${isActive ? 'text-cyan-400' : 'text-slate-400 group-hover:text-slate-200'}`} />
-                      <span>{item.label}</span>
-                    </div>
+                <div className="flex items-center space-x-3">
+                  <Icon className="w-4 h-4 text-slate-400 group-hover:text-cyan-400 transition-colors" />
+                  <span>{item.label}</span>
+                </div>
 
-                    <div className="flex items-center space-x-1.5">
-                      {item.badge && (
-                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${
-                          isActive ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : 'bg-slate-800 text-slate-400'
-                        }`}>
-                          {item.badge}
-                        </span>
-                      )}
-                      {isActive && <ChevronRight className="w-3.5 h-3.5 text-violet-400" />}
-                    </div>
-                  </>
-                )}
+                <div className="flex items-center space-x-1.5">
+                  {item.badge && (
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-slate-800 text-slate-400 group-hover:bg-cyan-500/20 group-hover:text-cyan-300">
+                      {item.badge}
+                    </span>
+                  )}
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-violet-400 transition-colors" />
+                </div>
               </NavLink>
             );
           })}
