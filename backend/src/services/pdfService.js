@@ -5,88 +5,144 @@ import { scanDocument } from './scannerService.js';
 import { generateMaskedImage } from './maskingService.js';
 
 /**
- * PDF Service for PRIVACLOUD AI
- * Converts PDF pages into flattened raster images, runs OCR and pattern scanning,
- * and generates permanently obscured masked copies.
+ * Advanced PDF Processing Service for PRIVACLOUD AI
+ * Handles native text streams, high-resolution rendered pages (multi-page),
+ * and embedded camera/scanner images of identity cards.
  */
 export async function processPdfDocument(pdfBuffer, filename = 'document.pdf') {
   let parser = null;
   let pdfText = '';
-  let pageImageBuffer = null;
+  const pageImageBuffers = [];
+  const embeddedImageBuffers = [];
 
   try {
     parser = new PDFParse({ data: pdfBuffer });
     
-    // Extract text stream from PDF
+    // 1. Extract digital text stream
     try {
       const textResult = await parser.getText();
       pdfText = textResult.text || '';
     } catch (e) {
-      console.warn('Direct PDF text extraction note:', e.message);
+      console.warn('PDF getText note:', e.message);
     }
 
-    // Render first page as high-resolution raster screenshot
+    // 2. Render all PDF pages as high-resolution raster screenshots (scale: 2.0)
     try {
-      const shot = await parser.getScreenshot({ scale: 1.5 });
-      if (shot.pages && shot.pages.length > 0 && shot.pages[0].data) {
-        pageImageBuffer = Buffer.from(shot.pages[0].data);
+      const shot = await parser.getScreenshot({ scale: 2.0 });
+      if (shot.pages && shot.pages.length > 0) {
+        for (const pg of shot.pages) {
+          if (pg.data) {
+            pageImageBuffers.push(Buffer.from(pg.data));
+          }
+        }
       }
     } catch (e) {
-      console.warn('PDF screenshot rendering note:', e.message);
+      console.warn('PDF getScreenshot note:', e.message);
+    }
+
+    // 3. Extract embedded camera/scanner images (for scanned Aadhaar cards)
+    try {
+      const imgRes = await parser.getImage();
+      if (imgRes && imgRes.pages) {
+        for (const p of imgRes.pages) {
+          for (const img of p.images || []) {
+            if (img.data) {
+              embeddedImageBuffers.push(Buffer.from(img.data));
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('PDF getImage note:', e.message);
     }
   } catch (err) {
     console.error('PDF parsing error:', err);
   }
 
-  // If raster screenshot is unavailable, fallback to rendering textual SVG to raster PNG
-  if (!pageImageBuffer) {
-    pageImageBuffer = await renderTextFallbackImage(pdfText, filename);
-  }
+  // Combined counts across all pages and streams
+  const aggregateCounts = {
+    aadhaar: 0,
+    pan: 0,
+    phone: 0,
+    email: 0
+  };
 
-  // Run OCR on the rasterized PDF page image to get bounding box coordinates
-  let scanResult = null;
-  try {
-    scanResult = await scanDocument(pageImageBuffer);
-  } catch (err) {
-    console.warn('OCR on PDF image note:', err.message);
-    scanResult = {
-      riskScore: 0,
-      riskLevel: 'Low',
-      counts: { aadhaar: 0, pan: 0, phone: 0, email: 0 },
-      detectedSensitiveBoxes: [],
-      hasSensitiveData: false
-    };
-  }
-
-  // Complement OCR counts with regex matches from the raw PDF text stream
+  // 4. Check digital text stream first
+  const normalizedPdfText = (pdfText || '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ');
   for (const [piiType, regex] of Object.entries(PII_PATTERNS)) {
-    const matches = pdfText.match(regex);
-    if (matches && matches.length > (scanResult.counts[piiType] || 0)) {
-      scanResult.counts[piiType] = matches.length;
+    const matches = normalizedPdfText.match(regex);
+    if (matches) {
+      aggregateCounts[piiType] = Math.max(aggregateCounts[piiType], matches.length);
+    }
+  }
+
+  // Check Aadhaar keywords in raw PDF text
+  if (/aadhaar|aadhar|uidai|आधार/i.test(normalizedPdfText) && /\d{4}/.test(normalizedPdfText)) {
+    aggregateCounts.aadhaar = Math.max(aggregateCounts.aadhaar, 1);
+  }
+
+  // 5. Select the primary page image to scan and display
+  let primaryPageBuffer = pageImageBuffers[0] || embeddedImageBuffers[0] || null;
+  if (!primaryPageBuffer) {
+    primaryPageBuffer = await renderTextFallbackImage(pdfText, filename);
+  }
+
+  // 6. Run OCR scanner on all available page images to map bounding boxes and detect PII
+  const candidateBuffers = [
+    ...pageImageBuffers,
+    ...embeddedImageBuffers
+  ];
+
+  let bestScanResult = null;
+  let targetPageBufferForMasking = primaryPageBuffer;
+
+  for (const buf of candidateBuffers) {
+    try {
+      const scan = await scanDocument(buf);
+      
+      // Accumulate counts
+      aggregateCounts.aadhaar = Math.max(aggregateCounts.aadhaar, scan.counts.aadhaar);
+      aggregateCounts.pan = Math.max(aggregateCounts.pan, scan.counts.pan);
+      aggregateCounts.phone = Math.max(aggregateCounts.phone, scan.counts.phone);
+      aggregateCounts.email = Math.max(aggregateCounts.email, scan.counts.email);
+
+      if (scan.detectedSensitiveBoxes && scan.detectedSensitiveBoxes.length > 0) {
+        if (!bestScanResult || scan.detectedSensitiveBoxes.length > bestScanResult.detectedSensitiveBoxes.length) {
+          bestScanResult = scan;
+          targetPageBufferForMasking = buf;
+        }
+      }
+    } catch (e) {
+      console.warn('Scan candidate page note:', e.message);
     }
   }
 
   // Recalculate combined risk score
-  const { riskScore, riskLevel } = calculateRisk(scanResult.counts);
-  scanResult.riskScore = riskScore;
-  scanResult.riskLevel = riskLevel;
-  scanResult.hasSensitiveData = riskScore > 0;
+  const { riskScore, riskLevel } = calculateRisk(aggregateCounts);
 
-  // Generate permanently masked copy
+  const finalScanResult = {
+    riskScore,
+    riskLevel,
+    counts: aggregateCounts,
+    detectedSensitiveBoxes: bestScanResult?.detectedSensitiveBoxes || [],
+    hasSensitiveData: riskScore > 0
+  };
+
+  // 7. Generate masked copy
   let maskedBuffer = null;
-  if (scanResult.hasSensitiveData && scanResult.detectedSensitiveBoxes.length > 0) {
-    maskedBuffer = await generateMaskedImage(pageImageBuffer, scanResult.detectedSensitiveBoxes);
-  } else if (scanResult.hasSensitiveData) {
-    // If sensitive data was found in text stream but bounding box was missed, overlay safety banner
-    maskedBuffer = await overlayPdfSafetyMask(pageImageBuffer, scanResult.counts);
+  if (finalScanResult.hasSensitiveData && finalScanResult.detectedSensitiveBoxes.length > 0) {
+    maskedBuffer = await generateMaskedImage(targetPageBufferForMasking, finalScanResult.detectedSensitiveBoxes);
+  } else if (finalScanResult.hasSensitiveData) {
+    // Sensitive data detected in text stream or card context - overlay safety banner
+    maskedBuffer = await overlayPdfSafetyMask(targetPageBufferForMasking, finalScanResult.counts);
   } else {
-    // If clean document, flatten to PNG
-    maskedBuffer = await sharp(pageImageBuffer).png().toBuffer();
+    // Clean document - output flattened raster PNG
+    maskedBuffer = await sharp(targetPageBufferForMasking).png().toBuffer();
   }
 
   return {
-    scanResult,
-    pageImageBuffer,
+    scanResult: finalScanResult,
+    pageImageBuffer: targetPageBufferForMasking,
     maskedBuffer
   };
 }
@@ -101,7 +157,7 @@ async function renderTextFallbackImage(text, filename) {
     .split('\n')
     .map(l => l.trim())
     .filter(l => l.length > 0)
-    .slice(0, 35); // up to 35 lines on page 1
+    .slice(0, 35);
 
   let textElements = '';
   let y = 140;

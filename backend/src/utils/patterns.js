@@ -2,17 +2,21 @@ import crypto from 'crypto';
 
 /**
  * PII Detection Patterns & Risk Scoring Constants
- * PRIVACLOUD AI Specification
+ * PRIVACLOUD AI Specification - Enhanced for real-world Aadhaar & Indian identity documents
  */
 export const PII_PATTERNS = {
-  // Aadhaar: 12 digits, often formatted as 4-4-4 with space or hyphen
-  aadhaar: /\b[2-9]\d{3}[\s\-]?\d{4}[\s\-]?\d{4}\b/g,
+  // Aadhaar:
+  // 1. 12 digits formatted as 4-4-4 with spaces, hyphens, dots, or slashes (e.g. 1234 5678 9012)
+  // 2. 12 contiguous digits (e.g. 123456789012)
+  // 3. Masked Aadhaar: XXXX XXXX 1234 or **** **** 1234 or •••• •••• 1234
+  // 4. Any 12 digits starting with any digit (0-9)
+  aadhaar: /(?:\b\d{4}[\s\-\.\/]{1,3}\d{4}[\s\-\.\/]{1,3}\d{4}\b|\b\d{12}\b|\b[xX\*•]{4}[\s\-\.\/]?[xX\*•]{4}[\s\-\.\/]?\d{4}\b)/g,
   
-  // PAN: 5 uppercase letters, 4 digits, 1 uppercase letter (e.g. ABCDE1234F)
-  pan: /\b[A-Z]{5}[0-9]{4}[A-Z]\b/g,
+  // PAN: 5 letters, 4 digits, 1 letter (e.g. ABCDE1234F) - case insensitive
+  pan: /\b[A-Za-z]{5}[0-9]{4}[A-Za-z]\b/g,
   
-  // Phone: Indian mobile numbers (10 digits starting with 6-9, optionally with +91 or 0)
-  phone: /\b(?:\+?91[\-\s]?|0)?[6-9]\d{9}\b/g,
+  // Phone: Indian mobile numbers (10 digits starting with 6-9, optionally with +91 or 0, with or without spaces/hyphens)
+  phone: /(?:\+?91[\s\-]?)?[6-9]\d{4}[\s\-]?\d{5}\b|(?:\+?91[\s\-]?)?[6-9]\d{9}\b/g,
   
   // Email: Standard email pattern
   email: /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/g,
