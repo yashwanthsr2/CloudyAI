@@ -112,13 +112,13 @@ export default function App() {
 
           {/* Authenticated Vault Routes using Single Canonical Tree */}
           <Route element={<ProtectedLayout />}>
-            <Route path="/" element={<DashboardView />} />
-            <Route path="/files" element={<MyFilesView />} />
-            <Route path="/upload" element={<UploadScanView />} />
-            <Route path="/privacy-analysis" element={<PrivacyAnalysisView />} />
-            <Route path="/shares" element={<SecureSharingView />} />
-            <Route path="/activity" element={<SecurityActivity />} />
-            <Route path="/analytics" element={<AnalyticsView />} />
+            <Route index element={<DashboardView />} />
+            <Route path="files" element={<MyFilesView />} />
+            <Route path="upload" element={<UploadScanView />} />
+            <Route path="privacy-analysis" element={<PrivacyAnalysisView />} />
+            <Route path="shares" element={<SecureSharingView />} />
+            <Route path="activity" element={<SecurityActivity />} />
+            <Route path="analytics" element={<AnalyticsView />} />
           </Route>
 
           {/* Catch-all */}
