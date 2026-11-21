@@ -36,6 +36,18 @@ The application faithfully implements the 6 design references with a cohesive co
 
 ---
 
+## 👥 How AI Cloud Drive Helps
+
+| User | How AI Cloud Drive helps |
+| :--- | :--- |
+| **College students** | Share certificates while hiding personal details. |
+| **Job applicants** | Share identity documents more safely with HR. |
+| **Hospitals** | Share patient documents with sensitive details masked. |
+| **Small businesses** | Share invoices and documents while protecting private information. |
+| **Employees** | Share office documents with controlled access. |
+
+---
+
 ## ⚖️ Strict Priority Risk Classification
 
 The system enforces a non-arbitrary, strict priority risk model. The highest detected category dictates the risk level and link Time-To-Live (TTL):

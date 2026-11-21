@@ -17,7 +17,12 @@ import {
   ShieldCheck,
   FileText,
   Clock,
-  ExternalLink
+  ExternalLink,
+  GraduationCap,
+  Briefcase,
+  HeartPulse,
+  Building2,
+  Users
 } from 'lucide-react';
 import { api } from '../services/api';
 import RiskBadge from '../components/RiskBadge';
@@ -398,6 +403,98 @@ export default function Dashboard({ files = [], quota = null, onRefresh }) {
 
         </div>
 
+      </div>
+
+      {/* Real-World Use Cases: How AI Cloud Drive Helps */}
+      <div className="cyber-panel rounded-2xl p-6 sm:p-8 space-y-6 border border-cosmic-border shadow-2xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-cosmic-border/60">
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
+                ECOSYSTEM IMPACT
+              </span>
+              <span className="text-[11px] text-emerald-400 font-mono flex items-center space-x-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Zero-Knowledge Protection Matrix</span>
+              </span>
+            </div>
+            <h2 className="text-xl font-bold text-white tracking-tight mt-1">
+              How AI Cloud Drive Helps
+            </h2>
+          </div>
+          <p className="text-xs text-slate-400 max-w-md">
+            Target applications and automated privacy safeguarding across everyday personal and professional document exchange.
+          </p>
+        </div>
+
+        {/* Impact Table Matching Specification */}
+        <div className="overflow-hidden rounded-xl border border-cosmic-border/80 bg-cosmic-950/60">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-cosmic-border bg-cosmic-900/80 text-slate-200 font-mono text-[11px] uppercase tracking-wider">
+                <th className="py-3.5 px-6 font-bold w-1/3">User</th>
+                <th className="py-3.5 px-6 font-bold">How AI Cloud Drive helps</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-cosmic-border/50 text-slate-300">
+              <tr className="hover:bg-violet-950/20 transition-colors">
+                <td className="py-4 px-6 font-semibold text-white flex items-center space-x-3">
+                  <div className="w-7 h-7 rounded-lg bg-violet-500/10 border border-violet-500/30 flex items-center justify-center text-violet-300 shrink-0">
+                    <GraduationCap className="w-4 h-4" />
+                  </div>
+                  <span>College students</span>
+                </td>
+                <td className="py-4 px-6 text-slate-300 font-medium">
+                  Share certificates while hiding personal details.
+                </td>
+              </tr>
+              <tr className="hover:bg-violet-950/20 transition-colors">
+                <td className="py-4 px-6 font-semibold text-white flex items-center space-x-3">
+                  <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-300 shrink-0">
+                    <Briefcase className="w-4 h-4" />
+                  </div>
+                  <span>Job applicants</span>
+                </td>
+                <td className="py-4 px-6 text-slate-300 font-medium">
+                  Share identity documents more safely with HR.
+                </td>
+              </tr>
+              <tr className="hover:bg-violet-950/20 transition-colors">
+                <td className="py-4 px-6 font-semibold text-white flex items-center space-x-3">
+                  <div className="w-7 h-7 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-300 shrink-0">
+                    <HeartPulse className="w-4 h-4" />
+                  </div>
+                  <span>Hospitals</span>
+                </td>
+                <td className="py-4 px-6 text-slate-300 font-medium">
+                  Share patient documents with sensitive details masked.
+                </td>
+              </tr>
+              <tr className="hover:bg-violet-950/20 transition-colors">
+                <td className="py-4 px-6 font-semibold text-white flex items-center space-x-3">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-300 shrink-0">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <span>Small businesses</span>
+                </td>
+                <td className="py-4 px-6 text-slate-300 font-medium">
+                  Share invoices and documents while protecting private information.
+                </td>
+              </tr>
+              <tr className="hover:bg-violet-950/20 transition-colors">
+                <td className="py-4 px-6 font-semibold text-white flex items-center space-x-3">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-300 shrink-0">
+                    <Users className="w-4 h-4" />
+                  </div>
+                  <span>Employees</span>
+                </td>
+                <td className="py-4 px-6 text-slate-300 font-medium">
+                  Share office documents with controlled access.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
     </div>

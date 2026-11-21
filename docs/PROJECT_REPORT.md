@@ -59,6 +59,16 @@ Cloud storage has transitioned from static archiving to collaborative sharing. H
 
 PRIVACLOUD AI was engineered to bridge these gaps, offering an enterprise-grade SaaS experience designed for high-security personal document custody.
 
+### 4.1 Target User Personas & Ecosystem Applications
+
+| User Category | How AI Cloud Drive Helps |
+| :--- | :--- |
+| **College students** | Share certificates while hiding personal details. |
+| **Job applicants** | Share identity documents more safely with HR. |
+| **Hospitals** | Share patient documents with sensitive details masked. |
+| **Small businesses** | Share invoices and documents while protecting private information. |
+| **Employees** | Share office documents with controlled access. |
+
 ---
 
 ## 5. Problem Statement
